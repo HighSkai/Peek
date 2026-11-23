@@ -14,22 +14,17 @@ use std::sync::atomic::Ordering;
 
 use serde::Serialize;
 use settings::{Settings, SettingsStore};
-use tauri::{
-    utils::config::WindowEffectsConfig, window::Effect, AppHandle, Manager, RunEvent, Theme,
-    WebviewUrl, WebviewWindowBuilder, WindowEvent,
-};
+use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_opener::OpenerExt;
 
-const SETTINGS_LABEL: &str = "settings";
-
 pub fn run() {
     tauri::Builder::default()
-        // Must be registered first: a second launch focuses the running instance.
+        // Must be registered first: a second launch opens settings in the running instance.
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if !args.iter().any(|a| a == "--autostart") {
-                open_settings_window(app);
+                open_settings_panel(app);
             }
         }))
         .plugin(
@@ -117,13 +112,14 @@ pub fn run() {
             open_settings,
             open_url,
             quit_app,
+            shortcut_suspend,
             system_info,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Peek")
         .run(|app, event| {
             if let RunEvent::ExitRequested { api, code, .. } = event {
-                // Closing the settings window must not quit the app; only "Quit" does.
+                // Only "Quit" ends the app; nothing else should close it.
                 let quitting = app
                     .state::<island::IslandState>()
                     .quitting
@@ -152,18 +148,14 @@ pub(crate) fn apply_settings(
     }
     if old.mode != new.mode
         || old.dashboard_size != new.dashboard_size
+        || old.density != new.density
         || old.offset_x != new.offset_x
         || old.offset_y != new.offset_y
         || old.monitor != new.monitor
     {
         island::layout(app);
     }
-    if old.theme != new.theme {
-        if let Some(w) = app.get_webview_window(SETTINGS_LABEL) {
-            let _ = w.set_theme(theme(&new.theme));
-        }
-    }
-    if old.mode != new.mode || old.feature_ai != new.feature_ai {
+    if old.mode != new.mode || old.feature_ai != new.feature_ai || old.reveal != new.reveal {
         tray::refresh_menu(app);
     }
     Ok(())
@@ -176,9 +168,11 @@ fn register_shortcut(app: &AppHandle, shortcut: &str) -> Result<(), String> {
     if shortcut.is_empty() {
         return Ok(());
     }
+    // Toggles the dashboard on its default tab. In hotkey mode this is how the island
+    // is shown at all.
     gs.on_shortcut(shortcut, |app, _shortcut, event| {
         if event.state == ShortcutState::Pressed {
-            island::send_command(app, "toggle", Some("home"), true);
+            island::send_command(app, "toggle", None, true);
         }
     })
     .map_err(|e| e.to_string())
@@ -197,43 +191,9 @@ fn sync_autostart(app: &AppHandle, enabled: bool) {
     }
 }
 
-fn theme(pref: &str) -> Option<Theme> {
-    match pref {
-        "dark" => Some(Theme::Dark),
-        "light" => Some(Theme::Light),
-        _ => None,
-    }
-}
-
-pub(crate) fn open_settings_window(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window(SETTINGS_LABEL) {
-        let _ = w.unminimize();
-        let _ = w.show();
-        let _ = w.set_focus();
-        return;
-    }
-    let settings = app.state::<SettingsStore>().get();
-    let mica = platform::is_windows_11();
-    let mut builder =
-        WebviewWindowBuilder::new(app, SETTINGS_LABEL, WebviewUrl::App("index.html".into()))
-            .title("Peek Settings")
-            .inner_size(940.0, 660.0)
-            .min_inner_size(760.0, 520.0)
-            .center()
-            .resizable(true)
-            .theme(theme(&settings.theme));
-    if mica {
-        builder = builder.transparent(true).effects(WindowEffectsConfig {
-            effects: vec![Effect::Mica],
-            ..Default::default()
-        });
-    }
-    match builder.build() {
-        Ok(w) => {
-            let _ = w.set_focus();
-        }
-        Err(e) => log::error!("failed to open settings: {e}"),
-    }
+/// Settings live inside the island: open the dashboard on its settings page.
+pub(crate) fn open_settings_panel(app: &AppHandle) {
+    island::send_command(app, "expand", Some("settings"), false);
 }
 
 pub(crate) fn quit(app: &AppHandle) {
@@ -245,7 +205,21 @@ pub(crate) fn quit(app: &AppHandle) {
 
 #[tauri::command]
 fn open_settings(app: AppHandle) {
-    open_settings_window(&app);
+    open_settings_panel(&app);
+}
+
+/// Pause the global shortcut while a new one is being recorded, so pressing the current
+/// combination doesn't toggle the island. Resuming re-registers the saved shortcut.
+#[tauri::command]
+fn shortcut_suspend(app: AppHandle, suspended: bool) -> Result<(), String> {
+    if suspended {
+        app.global_shortcut()
+            .unregister_all()
+            .map_err(|e| e.to_string())
+    } else {
+        let shortcut = app.state::<SettingsStore>().get().shortcut;
+        register_shortcut(&app, &shortcut)
+    }
 }
 
 #[tauri::command]

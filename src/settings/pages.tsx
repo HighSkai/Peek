@@ -10,7 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { api } from "@/lib/ipc"
 import type { Settings } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { ShortcutRecorder } from "./ShortcutRecorder"
+import { prettyKey, ShortcutRecorder } from "./ShortcutRecorder"
 import { Group, Page, Row, SliderValue } from "./ui"
 
 export interface PageProps {
@@ -18,7 +18,7 @@ export interface PageProps {
   set: (patch: Partial<Settings>) => void
 }
 
-function Choice<T extends string>({
+export function Choice<T extends string>({
   value,
   onChange,
   options,
@@ -28,16 +28,9 @@ function Choice<T extends string>({
   options: { value: T; label: string }[]
 }) {
   return (
-    <ToggleGroup
-      type="single"
-      variant="outline"
-      size="sm"
-      value={value}
-      onValueChange={(v) => v && onChange(v as T)}
-      className="bg-background/50"
-    >
+    <ToggleGroup type="single" value={value} onValueChange={(v) => v && onChange(v as T)}>
       {options.map((o) => (
-        <ToggleGroupItem key={o.value} value={o.value} className="px-3 text-[13px]">
+        <ToggleGroupItem key={o.value} value={o.value}>
           {o.label}
         </ToggleGroupItem>
       ))}
@@ -45,7 +38,7 @@ function Choice<T extends string>({
   )
 }
 
-function Pick<T extends string>({
+export function Pick<T extends string>({
   value,
   onChange,
   options,
@@ -58,7 +51,7 @@ function Pick<T extends string>({
 }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as T)}>
-      <SelectTrigger className={cn("w-48 bg-background/50", className)}>
+      <SelectTrigger size="sm" className={cn("w-40", className)}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -95,7 +88,7 @@ function RangeRow({
   useEffect(() => setLocal(value), [value])
   return (
     <Row label={label} description={description}>
-      <div className="flex w-64 items-center gap-3">
+      <div className="flex w-48 items-center gap-2.5">
         <Slider
           value={[local]}
           min={min}
@@ -103,6 +96,7 @@ function RangeRow({
           step={step}
           onValueChange={([v]) => setLocal(v)}
           onValueCommit={([v]) => onChange(v)}
+          aria-label={label}
         />
         <SliderValue>{format(local)}</SliderValue>
       </div>
@@ -110,61 +104,47 @@ function RangeRow({
   )
 }
 
+const SIZES = [
+  { value: "small", label: "Small" },
+  { value: "medium", label: "Medium" },
+  { value: "large", label: "Large" },
+] as const
+
 // ---------------------------------------------------------------------------
 
 export function GeneralPage({ s, set }: PageProps) {
   const [error, setError] = useState<string | null>(null)
+  const hotkey = s.reveal === "hotkey"
+  const keys = s.shortcut ? s.shortcut.split("+").map(prettyKey).join(" + ") : null
   return (
-    <Page title="General" description="Startup, behavior and the keyboard shortcut.">
-      <Group title="Startup">
-        <Row label="Launch Peek when you sign in" description="Starts quietly in the background with Windows.">
-          <Switch checked={s.launchAtLogin} onCheckedChange={(v) => set({ launchAtLogin: v })} />
-        </Row>
-        <Row label="Show the island on launch" description="Turn off to start hidden; open it from the tray or the shortcut.">
-          <Switch checked={s.showOnStartup} onCheckedChange={(v) => set({ showOnStartup: v })} />
-        </Row>
-      </Group>
-
-      <Group title="Behavior">
-        <Row label="Hide during fullscreen apps" description="Games, videos and presentations get the whole screen.">
-          <Switch checked={s.hideInFullscreen} onCheckedChange={(v) => set({ hideInFullscreen: v })} />
-        </Row>
-        <Row label="Close when clicking elsewhere" description="Collapse the dashboard when another window gets focus.">
-          <Switch checked={s.collapseOnBlur} onCheckedChange={(v) => set({ collapseOnBlur: v })} />
-        </Row>
-        <Row label="Open on hover" description="Expand the dashboard when the pointer rests on the island.">
-          <Switch checked={s.expandOnHover} onCheckedChange={(v) => set({ expandOnHover: v })} />
-        </Row>
-        {s.expandOnHover && (
-          <RangeRow
-            label="Hover delay"
-            value={s.hoverDelayMs}
-            min={0}
-            max={1500}
-            step={50}
-            format={(v) => `${v} ms`}
-            onChange={(v) => set({ hoverDelayMs: v })}
-          />
-        )}
-        <Row label="Open to" description="The section shown when the dashboard opens.">
-          <Pick
-            value={s.defaultTab}
-            onChange={(v) => set({ defaultTab: v })}
+    <Page>
+      <Group
+        title="Island"
+        footer={
+          error ??
+          (hotkey && !s.shortcut
+            ? "Set a shortcut, or open Peek from its tray icon."
+            : "Press Backspace while recording to clear the shortcut.")
+        }
+      >
+        <Row
+          label="Show the island"
+          description={
+            hotkey
+              ? `Hidden until you press ${keys ?? "the shortcut"} or click the tray icon.`
+              : "Rests at the top of the screen."
+          }
+        >
+          <Choice
+            value={s.reveal}
+            onChange={(v) => set({ reveal: v })}
             options={[
-              { value: "home", label: "Home" },
-              { value: "media", label: "Now Playing" },
-              { value: "system", label: "System" },
-              { value: "ask", label: "Ask" },
+              { value: "always", label: "Always" },
+              { value: "hotkey", label: "On shortcut" },
             ]}
           />
         </Row>
-      </Group>
-
-      <Group
-        title="Keyboard"
-        footer={error ?? "Opens the dashboard with the search bar focused. Press Backspace while recording to clear it."}
-      >
-        <Row label="Global shortcut">
+        <Row label="Shortcut" description="Opens and closes the dashboard.">
           <ShortcutRecorder
             value={s.shortcut}
             defaultValue="Alt+Shift+Space"
@@ -180,7 +160,56 @@ export function GeneralPage({ s, set }: PageProps) {
         </Row>
       </Group>
 
-      <Group title="Reset">
+      <Group title="Startup">
+        <Row label="Start with Windows" description="Runs quietly in the background after you sign in.">
+          <Switch checked={s.launchAtLogin} onCheckedChange={(v) => set({ launchAtLogin: v })} />
+        </Row>
+        {!hotkey && (
+          <Row label="Show the island on launch" description="Turn off to start hidden.">
+            <Switch checked={s.showOnStartup} onCheckedChange={(v) => set({ showOnStartup: v })} />
+          </Row>
+        )}
+      </Group>
+
+      <Group title="Behavior">
+        <Row label="Hide during fullscreen apps" description="Games, videos and presentations get the whole screen.">
+          <Switch checked={s.hideInFullscreen} onCheckedChange={(v) => set({ hideInFullscreen: v })} />
+        </Row>
+        <Row label="Close when clicking elsewhere">
+          <Switch checked={s.collapseOnBlur} onCheckedChange={(v) => set({ collapseOnBlur: v })} />
+        </Row>
+        {!hotkey && (
+          <Row label="Open on hover" description="Opens when the pointer rests on the island.">
+            <Switch checked={s.expandOnHover} onCheckedChange={(v) => set({ expandOnHover: v })} />
+          </Row>
+        )}
+        {!hotkey && s.expandOnHover && (
+          <RangeRow
+            label="Hover delay"
+            value={s.hoverDelayMs}
+            min={0}
+            max={1500}
+            step={50}
+            format={(v) => `${v} ms`}
+            onChange={(v) => set({ hoverDelayMs: v })}
+          />
+        )}
+        <Row label="Open to">
+          <Pick
+            className="w-32"
+            value={s.defaultTab === "settings" ? "home" : s.defaultTab}
+            onChange={(v) => set({ defaultTab: v })}
+            options={[
+              { value: "home", label: "Home" },
+              { value: "media", label: "Now playing" },
+              { value: "system", label: "System" },
+              { value: "ask", label: "Ask" },
+            ]}
+          />
+        </Row>
+      </Group>
+
+      <Group>
         <Row label="Restore default settings" description="API keys stay in Windows Credential Manager.">
           <Button variant="outline" size="sm" onClick={() => api.resetSettings()}>
             <RotateCcwIcon /> Reset
@@ -199,34 +228,34 @@ function ModeCard({ selected, onClick, notch, label }: { selected: boolean; onCl
       onClick={onClick}
       aria-pressed={selected}
       className={cn(
-        "group flex flex-1 flex-col items-center gap-2.5 rounded-xl border p-3 text-sm transition",
-        selected ? "border-foreground/60 bg-accent ring-2 ring-foreground/15" : "hover:bg-accent/60",
+        "flex flex-1 flex-col items-center gap-1.5 rounded-ctl p-1.5 text-[12px] ring-1 ring-inset transition-colors",
+        selected ? "bg-white/[0.08] ring-white/50" : "ring-white/10 hover:bg-white/[0.05]",
       )}
     >
-      <div className="relative h-16 w-full overflow-hidden rounded-lg bg-gradient-to-b from-neutral-300 to-neutral-200 dark:from-neutral-700 dark:to-neutral-800">
+      <div className="relative h-11 w-full overflow-hidden rounded-[5px] bg-gradient-to-b from-neutral-600 to-neutral-800">
         <div
           className={cn(
-            "absolute left-1/2 grid h-5 w-20 -translate-x-1/2 place-items-center bg-black",
-            notch ? "top-0 rounded-b-lg" : "top-2 rounded-full",
+            "absolute left-1/2 grid h-4 w-16 -translate-x-1/2 place-items-center bg-black",
+            notch ? "top-0 rounded-b-[6px]" : "top-1.5 rounded-full",
           )}
         >
-          <PeekEyes size={0.5} animate={false} />
+          <PeekEyes size={8} animate={false} />
         </div>
       </div>
-      <span className="font-medium">{label}</span>
+      <span className={selected ? "font-medium text-white" : "text-white/70"}>{label}</span>
     </button>
   )
 }
 
 export function AppearancePage({ s, set }: PageProps) {
   return (
-    <Page title="Appearance" description="How the island looks at rest and when it opens.">
+    <Page>
       <Group title="Style">
-        <div className="flex gap-3 p-4">
+        <div className="flex gap-2 p-2">
           <ModeCard label="Dynamic Island" notch={false} selected={s.mode === "island"} onClick={() => set({ mode: "island" })} />
           <ModeCard label="Notch" notch selected={s.mode === "notch"} onClick={() => set({ mode: "notch" })} />
         </div>
-        <Row label="Surface" description="Solid black blends in like hardware; glass lets the desktop show through.">
+        <Row label="Surface" description="Solid black looks like hardware. Glass lets the desktop show through.">
           <Choice
             value={s.style}
             onChange={(v) => set({ style: v })}
@@ -250,33 +279,28 @@ export function AppearancePage({ s, set }: PageProps) {
       </Group>
 
       <Group title="Size">
-        <Row label="Island">
+        <Row label="Density" description="Compact draws the island and dashboard about 14% smaller.">
           <Choice
-            value={s.islandSize}
-            onChange={(v) => set({ islandSize: v })}
+            value={s.density}
+            onChange={(v) => set({ density: v })}
             options={[
-              { value: "small", label: "Small" },
-              { value: "medium", label: "Medium" },
-              { value: "large", label: "Large" },
+              { value: "regular", label: "Regular" },
+              { value: "compact", label: "Compact" },
             ]}
           />
         </Row>
+        <Row label="Island">
+          <Choice value={s.islandSize} onChange={(v) => set({ islandSize: v })} options={[...SIZES]} />
+        </Row>
         <Row label="Dashboard">
-          <Choice
-            value={s.dashboardSize}
-            onChange={(v) => set({ dashboardSize: v })}
-            options={[
-              { value: "small", label: "Small" },
-              { value: "medium", label: "Medium" },
-              { value: "large", label: "Large" },
-            ]}
-          />
+          <Choice value={s.dashboardSize} onChange={(v) => set({ dashboardSize: v })} options={[...SIZES]} />
         </Row>
       </Group>
 
       <Group title="At rest">
-        <Row label="Show in the island" description="What the island shows when nothing else is going on.">
+        <Row label="Show in the island" description="When nothing else is going on.">
           <Pick
+            className="w-36"
             value={s.idleContent}
             onChange={(v) => set({ idleContent: v })}
             options={[
@@ -296,31 +320,18 @@ export function AppearancePage({ s, set }: PageProps) {
         <Row label="Show music in the island" description="Album art and a visualizer while something plays.">
           <Switch checked={s.showMediaActivity} onCheckedChange={(v) => set({ showMediaActivity: v })} />
         </Row>
-        <Row label="Announce new tracks" description="Briefly expand to show the next song.">
+        <Row label="Announce new tracks" description="Briefly shows the next song.">
           <Switch checked={s.mediaToast} onCheckedChange={(v) => set({ mediaToast: v })} />
         </Row>
         <Row label="Visualizer">
           <Pick
+            className="w-36"
             value={s.visualizer}
             onChange={(v) => set({ visualizer: v })}
             options={[
-              { value: "audio", label: "Reacts to audio" },
+              { value: "audio", label: "Follows the audio" },
               { value: "animated", label: "Animated" },
               { value: "off", label: "Off" },
-            ]}
-          />
-        </Row>
-      </Group>
-
-      <Group title="Settings window">
-        <Row label="Theme">
-          <Choice
-            value={s.theme}
-            onChange={(v) => set({ theme: v })}
-            options={[
-              { value: "system", label: "System" },
-              { value: "light", label: "Light" },
-              { value: "dark", label: "Dark" },
             ]}
           />
         </Row>
@@ -338,18 +349,18 @@ export function PositionPage({ s, set }: PageProps) {
   }, [])
   const label = (name: string) => name.replace(/^\\\\\.\\/, "").replace(/^DISPLAY/, "Display ")
   return (
-    <Page title="Position" description="Where the island sits on your screen.">
+    <Page>
       <Group title="Display">
         <Row label="Show on">
           <Pick
-            className="w-56"
+            className="w-44"
             value={s.monitor || "__primary"}
             onChange={(v) => set({ monitor: v === "__primary" ? "" : v })}
             options={[{ value: "__primary", label: "Primary display" }, ...monitors.map((m) => ({ value: m, label: label(m) }))]}
           />
         </Row>
       </Group>
-      <Group title="Placement" footer="The island stays centered at the top of the display; nudge it if it covers something you use.">
+      <Group title="Placement" footer="The island stays centered at the top of the display. Nudge it if it covers something you use.">
         <RangeRow
           label="Horizontal offset"
           value={s.offsetX}
@@ -384,35 +395,41 @@ export function PositionPage({ s, set }: PageProps) {
 
 // ---------------------------------------------------------------------------
 
-function AnimationPreview({ s }: { s: Settings }) {
+function MotionPreview({ s }: { s: Settings }) {
   const [open, setOpen] = useState(false)
+  const speed = s.animationSpeed || 1
   const transition = s.animations
-    ? { type: "spring" as const, visualDuration: 0.5 / s.animationSpeed, bounce: s.bounce }
+    ? {
+        type: "spring" as const,
+        visualDuration: (open ? 0.46 : 0.4) / speed,
+        bounce: open ? s.bounce : s.bounce * 0.6,
+      }
     : { duration: 0 }
   return (
-    <div className="flex h-44 flex-col items-center rounded-lg bg-gradient-to-b from-neutral-300 to-neutral-200 p-3 dark:from-neutral-800 dark:to-neutral-900">
+    <div className="flex h-28 flex-col items-center rounded-ctl bg-gradient-to-b from-neutral-700 to-neutral-900 p-2">
       <motion.button
         onClick={() => setOpen((o) => !o)}
-        className="grid place-items-center overflow-hidden bg-black text-[11px] font-medium text-white/70"
+        className="grid place-items-center overflow-hidden bg-black text-[11px] text-white/60"
         initial={false}
-        animate={{ width: open ? 300 : 120, height: open ? 130 : 28, borderRadius: open ? 26 : 14 }}
+        animate={{ width: open ? 240 : 100, height: open ? 88 : 22, borderRadius: open ? 20 : 11 }}
         transition={transition}
+        aria-label={open ? "Close the preview" : "Open the preview"}
       >
-        {open ? "Click to close" : <PeekEyes size={0.7} animate={false} />}
+        {open ? "Click to close" : <PeekEyes size={10} animate={false} />}
       </motion.button>
-      {!open && <span className="mt-auto text-xs text-muted-foreground">Click the island to preview</span>}
+      {!open && <span className="mt-auto text-[11px] text-white/45">Click the island to try it</span>}
     </div>
   )
 }
 
-export function AnimationsPage({ s, set }: PageProps) {
+export function MotionPage({ s, set }: PageProps) {
   return (
-    <Page title="Animations" description="Spring physics for every expand and collapse.">
-      <Group>
-        <div className="p-4">
-          <AnimationPreview s={s} />
+    <Page>
+      <Group footer="Drag the island down to open it and push it back up to close. A quick flick finishes the motion; a slow drag can be put back.">
+        <div className="p-2">
+          <MotionPreview s={s} />
         </div>
-        <Row label="Animations" description="Turn off for instant transitions.">
+        <Row label="Animations" description="Turn off for instant changes.">
           <Switch checked={s.animations} onCheckedChange={(v) => set({ animations: v })} />
         </Row>
         {s.animations && (
@@ -449,9 +466,9 @@ export function AnimationsPage({ s, set }: PageProps) {
 
 export function FeaturesPage({ s, set }: PageProps) {
   return (
-    <Page title="Features" description="Turn off anything you don't use. Disabled features stop running in the background.">
+    <Page>
       <Group title="Media">
-        <Row label="Media controls" description="Now playing, album art and playback controls for any app that reports media to Windows.">
+        <Row label="Media controls" description="Now playing and playback controls for any app that reports media to Windows.">
           <Switch checked={s.featureMedia} onCheckedChange={(v) => set({ featureMedia: v })} />
         </Row>
       </Group>
@@ -460,15 +477,14 @@ export function FeaturesPage({ s, set }: PageProps) {
         title="Hardware"
         footer={
           <>
-            CPU, GPU, memory, disks and network work out of the box. NVIDIA GPUs report temperature, fan and power directly.
-            For CPU temperatures and fan speeds, run{" "}
+            CPU, GPU, memory, disks and network work out of the box. For CPU temperatures and fan speeds, run{" "}
             <button
               className="underline underline-offset-2"
               onClick={() => api.openUrl("https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases")}
             >
               LibreHardwareMonitor
             </button>{" "}
-            (or OpenHardwareMonitor) in the background; Peek reads its sensors automatically.
+            in the background.
           </>
         }
       >
@@ -477,7 +493,7 @@ export function FeaturesPage({ s, set }: PageProps) {
         </Row>
         <Row label="Refresh every">
           <Pick
-            className="w-32"
+            className="w-28"
             value={String(s.hardwareIntervalMs)}
             onChange={(v) => set({ hardwareIntervalMs: Number(v) })}
             options={[
@@ -501,7 +517,7 @@ export function FeaturesPage({ s, set }: PageProps) {
       </Group>
 
       <Group title="Assistant">
-        <Row label="AI assistant" description="The Ask tab and AI answers from the search bar. Web search keeps working when this is off.">
+        <Row label="AI assistant" description="The Ask tab and AI answers from the search bar. Web search works without it.">
           <Switch checked={s.featureAi} onCheckedChange={(v) => set({ featureAi: v })} />
         </Row>
       </Group>

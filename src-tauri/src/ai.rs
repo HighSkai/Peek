@@ -28,6 +28,17 @@ use crate::{
     settings::{AiProvider, ProviderKind, Settings, SettingsStore},
 };
 
+/// Added to the system prompt when "Plain answers" is on. Condensed from the writing
+/// patterns catalogued by blader/humanizer (based on Wikipedia's "Signs of AI writing").
+const PLAIN_STYLE: &str = "\n\nWrite plainly:
+- Lead with the answer. No opening praise or filler (\"Great question\", \"Certainly\", \"Let's dive in\").
+- No closing offers or recaps (\"Let me know if...\", \"I hope this helps\", \"In summary\", \"Overall\").
+- Don't use em dashes; use commas, colons, parentheses or periods.
+- Avoid inflated words: delve, crucial, pivotal, seamless, robust, leverage, showcase, underscore, tapestry, testament, landscape, vibrant.
+- Say \"is\" and \"has\" instead of \"serves as\", \"stands as\" or \"boasts\".
+- Don't stage contrasts (\"It's not X, it's Y\") or pad lists to three items.
+- Bold only what must stand out; no bold labels on list items. Headings in sentence case.";
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ChatMessage {
     pub role: String,
@@ -199,23 +210,30 @@ async fn run_chat(
 ) -> Result<(), String> {
     let provider = settings
         .provider(request.provider_id.as_deref())
-        .ok_or("No AI provider is configured. Open Settings → AI.")?;
+        .ok_or("No AI provider is configured. Open Settings → AI and search.")?;
     if provider.model.trim().is_empty() {
         return Err(format!(
-            "No model selected for {}. Pick one in Settings → AI.",
+            "No model selected for {}. Pick one in Settings → AI and search.",
             provider.name
         ));
     }
     let key = if provider.needs_key {
         Some(
-            secrets::get(&secret_name(&provider))
-                .ok_or_else(|| format!("Add your {} API key in Settings → AI.", provider.name))?,
+            secrets::get(&secret_name(&provider)).ok_or_else(|| {
+                format!(
+                    "Add your {} API key in Settings → AI and search.",
+                    provider.name
+                )
+            })?,
         )
     } else {
         secrets::get(&secret_name(&provider))
     };
 
     let mut system = settings.ai_system_prompt.trim().to_string();
+    if settings.ai_plain_style {
+        system.push_str(PLAIN_STYLE);
+    }
     if let Some(t) = &request.local_time {
         system.push_str(&format!("\n\nThe user's local date and time is {t}."));
     }

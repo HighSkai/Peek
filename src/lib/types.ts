@@ -2,8 +2,12 @@
 
 export type IslandMode = "notch" | "island"
 export type SizePreset = "small" | "medium" | "large"
+/** Regular, or compact: the whole island drawn about 14% smaller. */
+export type Density = "regular" | "compact"
+/** "always": the island rests at the top of the screen. "hotkey": it only appears when opened. */
+export type Reveal = "always" | "hotkey"
 export type ProviderKind = "ollama" | "openai" | "anthropic" | "gemini"
-export type Tab = "home" | "system" | "media" | "ask"
+export type Tab = "home" | "system" | "media" | "ask" | "settings"
 
 export interface AiProvider {
   id: string
@@ -25,16 +29,18 @@ export interface Settings {
   shortcut: string
   defaultTab: Tab
 
+  reveal: Reveal
+
   mode: IslandMode
   style: "solid" | "glass"
   glassOpacity: number
+  density: Density
   islandSize: SizePreset
   dashboardSize: SizePreset
   idleContent: "eyes" | "clock" | "stats" | "none"
   showMediaActivity: boolean
   mediaToast: boolean
   visualizer: "audio" | "animated" | "off"
-  theme: "system" | "dark" | "light"
   clock24h: boolean
 
   monitor: string
@@ -55,6 +61,8 @@ export interface Settings {
   aiProvider: string
   aiProviders: AiProvider[]
   aiSystemPrompt: string
+  /** Ask the model for plain answers without the usual chatbot filler. */
+  aiPlainStyle: boolean
   enterAction: "ai" | "web"
   searchEngine: string
   searchCustomUrl: string

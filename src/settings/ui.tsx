@@ -1,23 +1,18 @@
 import { cn } from "@/lib/utils"
 
-export function Page({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
-  return (
-    <div className="mx-auto max-w-[680px] px-8 pb-12 pt-7">
-      <h1 className="text-[22px] font-semibold tracking-tight">{title}</h1>
-      {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
-      <div className="mt-6 space-y-6">{children}</div>
-    </div>
-  )
+// Building blocks for the settings pages inside the open island, styled after the
+// Windows 11 Settings app: grouped rows with the label on the left, control on the right.
+
+export function Page({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-3 pb-3 pr-2 pt-0.5">{children}</div>
 }
 
 export function Group({ title, children, footer }: { title?: string; children: React.ReactNode; footer?: React.ReactNode }) {
   return (
     <section>
-      {title && <h2 className="mb-2 px-1 text-[13px] font-semibold text-foreground/80">{title}</h2>}
-      <div className="divide-y divide-border overflow-hidden rounded-xl border bg-[var(--panel)] shadow-xs backdrop-blur-sm">
-        {children}
-      </div>
-      {footer && <p className="mt-2 px-1 text-xs leading-relaxed text-muted-foreground">{footer}</p>}
+      {title && <h3 className="mb-1 px-1 text-[12px] font-semibold text-white/70">{title}</h3>}
+      <div className="divide-y divide-white/[0.06] overflow-hidden rounded-card bg-white/[0.055]">{children}</div>
+      {footer && <p className="mt-1 px-1 text-[11.5px] leading-snug text-white/45">{footer}</p>}
     </section>
   )
 }
@@ -38,12 +33,18 @@ export function Row({
   className?: string
 }) {
   return (
-    <div className={cn("flex gap-4 px-4 py-3.5", stacked ? "flex-col" : "items-center justify-between", className)}>
+    <div
+      className={cn(
+        "flex px-3 py-2",
+        stacked ? "flex-col gap-1.5" : "min-h-[40px] items-center justify-between gap-3",
+        className,
+      )}
+    >
       <div className="min-w-0">
-        <label htmlFor={htmlFor} className="text-sm font-medium leading-none">
+        <label htmlFor={htmlFor} className="block text-[12.5px] leading-tight text-white/90">
           {label}
         </label>
-        {description && <p className="mt-1.5 text-[13px] leading-snug text-muted-foreground">{description}</p>}
+        {description && <p className="mt-0.5 text-[11.5px] leading-snug text-white/45">{description}</p>}
       </div>
       {children && <div className={cn(stacked ? "w-full" : "shrink-0")}>{children}</div>}
     </div>
@@ -51,5 +52,5 @@ export function Row({
 }
 
 export function SliderValue({ children }: { children: React.ReactNode }) {
-  return <span className="tabular w-14 shrink-0 text-right text-[13px] text-muted-foreground">{children}</span>
+  return <span className="tabular w-12 shrink-0 text-right font-small text-[11.5px] text-white/55">{children}</span>
 }

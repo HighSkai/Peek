@@ -24,6 +24,14 @@ pub enum SizePreset {
     Large,
 }
 
+/// How large everything is drawn. Compact is the same layout, about 14% smaller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Density {
+    Regular,
+    Compact,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProviderKind {
@@ -159,12 +167,16 @@ pub struct Settings {
     pub hover_delay_ms: u32,
     pub shortcut: String,
     pub default_tab: String,
+    /// "always": the island rests at the top of the screen.
+    /// "hotkey": it stays out of sight until opened with the shortcut or the tray icon.
+    pub reveal: String,
 
     // Appearance
     pub mode: IslandMode,
     /// "solid" (pure black, like the hardware) or "glass" (translucent).
     pub style: String,
     pub glass_opacity: f32,
+    pub density: Density,
     pub island_size: SizePreset,
     pub dashboard_size: SizePreset,
     /// "eyes" | "clock" | "stats" | "none"
@@ -173,8 +185,6 @@ pub struct Settings {
     pub media_toast: bool,
     /// "audio" (reacts to system output) | "animated" | "off"
     pub visualizer: String,
-    /// Theme of the settings window: "system" | "dark" | "light"
-    pub theme: String,
     pub clock_24h: bool,
 
     // Position
@@ -201,6 +211,8 @@ pub struct Settings {
     pub ai_provider: String,
     pub ai_providers: Vec<AiProvider>,
     pub ai_system_prompt: String,
+    /// Ask the model for plain answers without the usual chatbot filler (see ai.rs).
+    pub ai_plain_style: bool,
     /// "ai" | "web": what pressing Enter in the search bar does.
     pub enter_action: String,
     pub search_engine: String,
@@ -223,17 +235,18 @@ impl Default for Settings {
             hover_delay_ms: 350,
             shortcut: "Alt+Shift+Space".into(),
             default_tab: "home".into(),
+            reveal: "always".into(),
 
             mode: IslandMode::Island,
             style: "solid".into(),
             glass_opacity: 0.82,
+            density: Density::Regular,
             island_size: SizePreset::Medium,
             dashboard_size: SizePreset::Medium,
             idle_content: "eyes".into(),
             show_media_activity: true,
             media_toast: true,
             visualizer: "audio".into(),
-            theme: "system".into(),
             clock_24h: false,
 
             monitor: String::new(),
@@ -254,9 +267,10 @@ impl Default for Settings {
             ai_provider: "ollama".into(),
             ai_providers: default_providers(),
             ai_system_prompt:
-                "You are Peek, a helpful assistant that lives in the Windows Dynamic Island. \
-Answer clearly and concisely. Use short paragraphs and Markdown when it helps."
+                "You are Peek, an assistant built into a small panel at the top of a Windows \
+desktop. Answer clearly and briefly. Use Markdown only when it helps."
                     .into(),
+            ai_plain_style: true,
             enter_action: "ai".into(),
             search_engine: "google".into(),
             search_custom_url: "https://www.google.com/search?q=%s".into(),
@@ -279,6 +293,12 @@ impl Settings {
         self.offset_x = self.offset_x.clamp(-2000, 2000);
         self.offset_y = self.offset_y.clamp(0, 200);
         self.grounding_results = self.grounding_results.clamp(1, 10);
+        if self.reveal != "always" && self.reveal != "hotkey" {
+            self.reveal = "always".into();
+        }
+        if self.default_tab == "settings" {
+            self.default_tab = "home".into();
+        }
         // Make sure built-in providers exist even if the stored list predates them.
         for p in default_providers() {
             if !self.ai_providers.iter().any(|x| x.id == p.id) {

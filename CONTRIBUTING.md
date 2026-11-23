@@ -25,11 +25,18 @@ building the native app. Useful query parameters:
 
 | Parameter | Effect |
 | --- | --- |
-| `?window=settings` | Show the settings window |
-| `&expanded=1&tab=home` | Open the dashboard on a tab (`home`, `media`, `system`, `ask`) |
+| `?expanded=1&tab=home` | Open the dashboard on a tab (`home`, `media`, `system`, `ask`, `settings`) |
+| `&page=appearance` | Settings page (`general`, `appearance`, `position`, `motion`, `features`, `ai`, `about`) |
 | `&mode=notch` / `&style=glass` | Try other appearances |
+| `&density=compact` | Compact density |
+| `&reveal=hotkey` | Hotkey mode: the island stays hidden until opened |
+| `&idle=clock` | What the resting island shows (`eyes`, `clock`, `stats`, `none`) |
 | `&prompt=Hello` | Send a question to the demo assistant |
-| `&media=0` | Nothing playing |
+| `&media=0` / `&playing=0` | Nothing playing / paused |
+| `&banner=1` | Announce a new track shortly after loading |
+
+The browser pane in some editors pauses `requestAnimationFrame` while hidden, which also
+pauses the animations. Use a visible window when checking motion.
 
 ## Before opening a pull request
 
@@ -41,12 +48,17 @@ cargo clippy
 ```
 
 - Keep the palette black, gray and white.
+- Use the Windows type: Segoe UI Variable (`font-sans`, `font-small` for 11px and under,
+  `font-display` for large numbers) and the two radius tokens (`rounded-card`, `rounded-ctl`).
+- Keep labels and headings in sentence case, and skip decoration that doesn't do a job
+  (glows, shimmer, gradient text, cards inside cards). The
+  [no-slop pattern catalog](https://github.com/eid0lon/zero-slop) is a good checklist.
 - New settings need a default in `src-tauri/src/settings.rs`, a type in `src/lib/types.ts`
-  and a control in the settings window.
+  and a control in `src/settings/`.
 - Never log or persist API keys; they belong in Windows Credential Manager via `secrets.rs`.
 
 ## Releasing
 
-Bump the version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`,
-then push a tag such as `v0.2.0`. The release workflow builds the installers and publishes
-them on the Releases page.
+Bump the version in `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`,
+`src-tauri/Cargo.lock` and `src-tauri/tauri.conf.json`, then push a tag such as `v0.2.0`.
+The release workflow builds the installers and publishes them on the Releases page.

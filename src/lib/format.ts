@@ -1,7 +1,10 @@
-const UNITS = ["B", "KB", "MB", "GB", "TB"]
+﻿const UNITS = ["B", "KB", "MB", "GB", "TB"]
+
+/** Shown when a reading isn't available. */
+export const NONE = "--"
 
 export function bytes(n: number | null | undefined, digits = 1): string {
-  if (n == null || !isFinite(n)) return "—"
+  if (n == null || !isFinite(n)) return NONE
   let i = 0
   let v = n
   while (v >= 1024 && i < UNITS.length - 1) {
@@ -12,17 +15,17 @@ export function bytes(n: number | null | undefined, digits = 1): string {
 }
 
 export function rate(bps: number | null | undefined): string {
-  if (bps == null || !isFinite(bps)) return "—"
+  if (bps == null || !isFinite(bps)) return NONE
   return `${bytes(bps)}/s`
 }
 
 export function pct(n: number | null | undefined, digits = 0): string {
-  if (n == null || !isFinite(n)) return "—"
+  if (n == null || !isFinite(n)) return NONE
   return `${n.toFixed(digits)}%`
 }
 
 export function temp(c: number | null | undefined, unit: "c" | "f" = "c"): string {
-  if (c == null || !isFinite(c)) return "—"
+  if (c == null || !isFinite(c)) return NONE
   return unit === "f" ? `${Math.round((c * 9) / 5 + 32)}°F` : `${Math.round(c)}°C`
 }
 
@@ -45,7 +48,7 @@ export function uptime(secs: number): string {
 }
 
 export function ghz(mhz: number | null | undefined): string {
-  if (!mhz) return "—"
+  if (!mhz) return NONE
   return `${(mhz / 1000).toFixed(2)} GHz`
 }
 

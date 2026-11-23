@@ -43,6 +43,14 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let open = MenuItem::with_id(app, "open", "Open dashboard", true, None::<&str>)?;
     let ask = MenuItem::with_id(app, "ask", "Ask Peek…", settings.feature_ai, None::<&str>)?;
     let show = CheckMenuItem::with_id(app, "show", "Show island", true, visible, None::<&str>)?;
+    let hotkey = CheckMenuItem::with_id(
+        app,
+        "reveal-hotkey",
+        "Show only on shortcut",
+        true,
+        settings.reveal == "hotkey",
+        None::<&str>,
+    )?;
     let notch = CheckMenuItem::with_id(
         app,
         "mode-notch",
@@ -64,7 +72,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     MenuBuilder::new(app)
         .items(&[&open, &ask])
         .item(&PredefinedMenuItem::separator(app)?)
-        .items(&[&show, &notch, &isl])
+        .items(&[&show, &hotkey, &notch, &isl])
         .item(&PredefinedMenuItem::separator(app)?)
         .items(&[&prefs, &quit])
         .build()
@@ -79,9 +87,9 @@ pub fn refresh_menu(app: &AppHandle) {
     }
 }
 
-fn set_mode(app: &AppHandle, mode: IslandMode) {
+fn patch_settings(app: &AppHandle, patch: serde_json::Value) {
     let store = app.state::<SettingsStore>();
-    if let Ok((old, new)) = store.patch(serde_json::json!({ "mode": mode })) {
+    if let Ok((old, new)) = store.patch(patch) {
         let _ = crate::apply_settings(app, &old, &new);
         let _ = app.emit(SETTINGS_EVENT, &new);
     }
@@ -95,9 +103,14 @@ fn handle_menu(app: &AppHandle, id: &str) {
             let hidden = island::is_user_hidden(app);
             island::set_user_hidden(app, !hidden);
         }
-        "mode-notch" => set_mode(app, IslandMode::Notch),
-        "mode-island" => set_mode(app, IslandMode::Island),
-        "settings" => crate::open_settings_window(app),
+        "reveal-hotkey" => {
+            let hotkey = app.state::<SettingsStore>().get().reveal == "hotkey";
+            let next = if hotkey { "always" } else { "hotkey" };
+            patch_settings(app, serde_json::json!({ "reveal": next }));
+        }
+        "mode-notch" => patch_settings(app, serde_json::json!({ "mode": IslandMode::Notch })),
+        "mode-island" => patch_settings(app, serde_json::json!({ "mode": IslandMode::Island })),
+        "settings" => crate::open_settings_panel(app),
         "quit" => crate::quit(app),
         _ => {}
     }

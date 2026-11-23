@@ -108,20 +108,13 @@ export const api = {
   secretSet: (name: string, value: string) => call<void>("secret_set", { name, value }),
   secretExists: (name: string) => call<boolean>("secret_exists", { name }),
 
+  /** Pause the global shortcut while a new one is being recorded. */
+  suspendShortcut: (suspended: boolean) => call<void>("shortcut_suspend", { suspended }),
+
   checkForUpdates: () => call<UpdateInfo>("check_for_updates"),
-  openSettings: () => call<void>("open_settings"),
   openUrl: (url: string) => call<void>("open_url", { url }),
   quit: () => call<void>("quit_app"),
   systemInfo: () => call<SystemInfo>("system_info"),
-}
-
-/** Label of the current window ("island" or "settings"). */
-export async function windowLabel(): Promise<string> {
-  if (inTauri) {
-    const { getCurrentWindow } = await import("@tauri-apps/api/window")
-    return getCurrentWindow().label
-  }
-  return new URLSearchParams(location.search).get("window") ?? "island"
 }
 
 /** Subscribe to focus changes of the current window. */

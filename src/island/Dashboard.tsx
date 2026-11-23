@@ -2,17 +2,19 @@ import { useRef } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import {
   ActivityIcon,
+  ChevronLeftIcon,
   ChevronUpIcon,
   HouseIcon,
+  MessageCircleIcon,
   MusicIcon,
   PinIcon,
   PinOffIcon,
-  Settings2Icon,
-  SparklesIcon,
+  SettingsIcon,
 } from "lucide-react"
-import { api } from "@/lib/ipc"
+import { useIslandUi } from "@/lib/store"
 import type { Settings, Tab } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { SettingsPanel } from "@/settings/SettingsPanel"
 import { AskTab } from "./tabs/AskTab"
 import { HomeTab } from "./tabs/HomeTab"
 import { MediaTab } from "./tabs/MediaTab"
@@ -20,17 +22,19 @@ import { SystemTab } from "./tabs/SystemTab"
 
 const TABS: { id: Tab; label: string; icon: typeof HouseIcon }[] = [
   { id: "home", label: "Home", icon: HouseIcon },
-  { id: "media", label: "Now Playing", icon: MusicIcon },
+  { id: "media", label: "Now playing", icon: MusicIcon },
   { id: "system", label: "System", icon: ActivityIcon },
-  { id: "ask", label: "Ask", icon: SparklesIcon },
+  { id: "ask", label: "Ask", icon: MessageCircleIcon },
 ]
 
+/**
+ * The open island. The header and the handle at the bottom are drag handles (see
+ * IslandApp): push them up to close. Laid out at regular density.
+ */
 export function Dashboard({
   settings,
   width,
   height,
-  tab,
-  setTab,
   pinned,
   setPinned,
   onCollapse,
@@ -39,79 +43,114 @@ export function Dashboard({
   settings: Settings
   width: number
   height: number
-  tab: Tab
-  setTab: (t: Tab) => void
   pinned: boolean
   setPinned: (p: boolean) => void
   onCollapse: () => void
   searchNonce: number
 }) {
+  const tab = useIslandUi((s) => s.tab)
+  const setTab = useIslandUi((s) => s.setTab)
+  const openSettings = useIslandUi((s) => s.openSettings)
+  const closeSettings = useIslandUi((s) => s.closeSettings)
+
   const tabs = TABS.filter(
     (t) =>
       (t.id !== "media" || settings.featureMedia) &&
       (t.id !== "system" || settings.featureHardware) &&
       (t.id !== "ask" || settings.featureAi),
   )
-  const active = tabs.some((t) => t.id === tab) ? tab : "home"
-  const order = tabs.findIndex((t) => t.id === active)
+  const inSettings = tab === "settings"
+  const active: Tab = inSettings ? "settings" : tabs.some((t) => t.id === tab) ? tab : "home"
+  const order = inSettings ? tabs.length : tabs.findIndex((t) => t.id === active)
   const prevOrder = useRef(order)
   const direction = order >= prevOrder.current ? 1 : -1
   prevOrder.current = order
-
-  const grab = useRef<{ y: number } | null>(null)
+  const anim = settings.animations
+  const speed = settings.animationSpeed || 1
 
   return (
-    <div className="absolute left-1/2 top-0 -translate-x-1/2 text-white" style={{ width, height }}>
-      {/* Header */}
-      <div className={cn("flex h-12 items-center justify-between px-3", settings.mode === "notch" ? "pt-1" : "pt-1.5")}>
-        <nav className="flex items-center gap-1" aria-label="Sections">
-          {tabs.map((t) => {
-            const Icon = t.icon
-            const selected = t.id === active
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                title={t.label}
-                aria-label={t.label}
-                aria-current={selected ? "page" : undefined}
-                className={cn(
-                  "relative flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium transition-colors",
-                  selected ? "text-white" : "text-white/50 hover:text-white/80",
-                )}
-              >
-                {selected && (
-                  <motion.span
-                    layoutId="peek-tab"
-                    className="absolute inset-0 rounded-full bg-white/[0.12]"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                  />
-                )}
-                <Icon className="relative size-4" />
-                <AnimatePresence initial={false}>
-                  {selected && (
-                    <motion.span
-                      className="relative overflow-hidden whitespace-nowrap"
-                      initial={{ width: 0, opacity: 0 }}
-                      animate={{ width: "auto", opacity: 1 }}
-                      exit={{ width: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      {t.label}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </button>
-            )
-          })}
-        </nav>
+    <div className="absolute inset-0 text-white" style={{ width, height }}>
+      {/* Header: tabs on the left, window actions on the right. Drag it up to close. */}
+      <div
+        data-drag-handle
+        className={cn("flex h-10 items-center justify-between pl-2 pr-1.5", settings.mode === "notch" ? "pt-0.5" : "pt-1")}
+      >
+        <AnimatePresence initial={false} mode="popLayout">
+          {inSettings ? (
+            <motion.div
+              key="settings-title"
+              className="flex items-center gap-0.5"
+              initial={anim ? { opacity: 0, x: 8 } : false}
+              animate={{ opacity: 1, x: 0 }}
+              exit={anim ? { opacity: 0, x: 8 } : { opacity: 0 }}
+              transition={{ duration: 0.18 }}
+            >
+              <HeaderButton label="Back" onClick={closeSettings}>
+                <ChevronLeftIcon className="size-4" />
+              </HeaderButton>
+              <span className="text-[13px] font-semibold">Settings</span>
+            </motion.div>
+          ) : (
+            <motion.nav
+              key="tabs"
+              className="flex items-center gap-0.5"
+              aria-label="Sections"
+              initial={anim ? { opacity: 0, x: -8 } : false}
+              animate={{ opacity: 1, x: 0 }}
+              exit={anim ? { opacity: 0, x: -8 } : { opacity: 0 }}
+              transition={{ duration: 0.18 }}
+            >
+              {tabs.map((t) => {
+                const Icon = t.icon
+                const selected = t.id === active
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setTab(t.id)}
+                    title={t.label}
+                    aria-label={t.label}
+                    aria-current={selected ? "page" : undefined}
+                    className={cn(
+                      "relative flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium transition-colors",
+                      selected ? "text-white" : "text-white/50 hover:text-white/85",
+                    )}
+                  >
+                    {selected && (
+                      <motion.span
+                        layoutId="peek-tab"
+                        className="absolute inset-0 rounded-full bg-white/[0.12]"
+                        transition={{ type: "spring", bounce: 0.18, visualDuration: 0.3 / speed }}
+                      />
+                    )}
+                    <Icon className="relative size-[15px]" />
+                    <AnimatePresence initial={false}>
+                      {selected && (
+                        <motion.span
+                          className="relative overflow-hidden whitespace-nowrap"
+                          initial={{ width: 0, opacity: 0 }}
+                          animate={{ width: "auto", opacity: 1 }}
+                          exit={{ width: 0, opacity: 0 }}
+                          transition={{ type: "spring", bounce: 0, visualDuration: 0.22 / speed }}
+                        >
+                          {t.label}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </button>
+                )
+              })}
+            </motion.nav>
+          )}
+        </AnimatePresence>
         <div className="flex items-center gap-0.5">
           <HeaderButton label={pinned ? "Unpin" : "Keep open"} onClick={() => setPinned(!pinned)} active={pinned}>
-            {pinned ? <PinOffIcon className="size-4" /> : <PinIcon className="size-4" />}
+            {pinned ? <PinOffIcon className="size-[15px]" /> : <PinIcon className="size-[15px]" />}
           </HeaderButton>
-          <HeaderButton label="Settings" onClick={() => api.openSettings()}>
-            <Settings2Icon className="size-4" />
-          </HeaderButton>
+          {!inSettings && (
+            <HeaderButton label="Settings" onClick={() => openSettings()}>
+              <SettingsIcon className="size-[15px]" />
+            </HeaderButton>
+          )}
           <HeaderButton label="Close" onClick={onCollapse}>
             <ChevronUpIcon className="size-4" />
           </HeaderButton>
@@ -119,39 +158,35 @@ export function Dashboard({
       </div>
 
       {/* Content */}
-      <div className="absolute inset-x-2.5 bottom-5 top-12 overflow-hidden rounded-[26px] bg-white/[0.035] ring-1 ring-inset ring-white/[0.06]">
+      <div className="absolute inset-x-2 bottom-4 top-10 overflow-hidden">
         <AnimatePresence initial={false} mode="popLayout" custom={direction}>
           <motion.div
             key={active}
             className="absolute inset-0"
             custom={direction}
-            initial={settings.animations ? { opacity: 0, x: 24 * direction } : false}
+            initial={anim ? { opacity: 0, x: 14 * direction } : false}
             animate={{ opacity: 1, x: 0 }}
-            exit={settings.animations ? { opacity: 0, x: -24 * direction } : { opacity: 0 }}
-            transition={{ type: "spring", bounce: 0.15, duration: 0.35 / (settings.animationSpeed || 1) }}
+            exit={anim ? { opacity: 0, x: -14 * direction } : { opacity: 0 }}
+            transition={{ type: "spring", bounce: 0, visualDuration: 0.26 / speed }}
           >
-            {active === "home" && <HomeTab settings={settings} setTab={setTab} searchNonce={searchNonce} />}
+            {active === "home" && <HomeTab settings={settings} searchNonce={searchNonce} />}
             {active === "media" && <MediaTab settings={settings} />}
             {active === "system" && <SystemTab settings={settings} />}
             {active === "ask" && <AskTab settings={settings} searchNonce={searchNonce} />}
+            {active === "settings" && <SettingsPanel settings={settings} />}
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Grabber: click or drag up to close */}
+      {/* Handle: tap or push up to close, pull down to stretch. */}
       <div
-        className="absolute inset-x-0 bottom-0 flex h-5 items-center justify-center"
-        onPointerDown={(e) => {
-          grab.current = { y: e.clientY }
-          e.currentTarget.setPointerCapture(e.pointerId)
-        }}
-        onPointerUp={(e) => {
-          const g = grab.current
-          grab.current = null
-          if (g && (g.y - e.clientY > 8 || Math.abs(g.y - e.clientY) < 4)) onCollapse()
-        }}
+        data-drag-handle
+        data-grabber
+        role="button"
+        aria-label="Close"
+        className="absolute inset-x-0 bottom-0 flex h-4 items-center justify-center"
       >
-        <span className="h-1 w-10 rounded-full bg-white/25 transition-colors hover:bg-white/50" />
+        <span className="h-1 w-9 rounded-full bg-white/25 transition-[width,background-color] duration-200 hover:bg-white/50 group-data-[dragging]/island:w-12 group-data-[dragging]/island:bg-white/60" />
       </div>
     </div>
   )
@@ -174,7 +209,7 @@ function HeaderButton({
       title={label}
       aria-label={label}
       className={cn(
-        "grid size-8 place-items-center rounded-full transition-colors",
+        "grid size-7 place-items-center rounded-full transition-colors",
         active ? "bg-white/15 text-white" : "text-white/55 hover:bg-white/10 hover:text-white",
       )}
     >

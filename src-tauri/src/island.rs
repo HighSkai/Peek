@@ -18,22 +18,28 @@ use std::{
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 
-use crate::settings::{IslandMode, Settings, SettingsStore, SizePreset};
+use crate::settings::{Density, IslandMode, Settings, SettingsStore, SizePreset};
 
 pub const LABEL: &str = "island";
 pub const HOVER_EVENT: &str = "island://hover";
 pub const COMMAND_EVENT: &str = "island://command";
 
-/// Logical size of the expanded dashboard for each preset. Mirrored in `src/lib/layout.ts`.
-pub fn dashboard_size(preset: SizePreset) -> (f64, f64) {
-    match preset {
-        SizePreset::Small => (620.0, 380.0),
-        SizePreset::Medium => (700.0, 430.0),
-        SizePreset::Large => (800.0, 500.0),
-    }
+/// Logical size of the expanded dashboard. Mirrored in `src/lib/layout.ts`.
+pub fn dashboard_size(preset: SizePreset, density: Density) -> (f64, f64) {
+    let (w, h) = match preset {
+        SizePreset::Small => (540.0, 320.0),
+        SizePreset::Medium => (600.0, 356.0),
+        SizePreset::Large => (680.0, 404.0),
+    };
+    let scale = match density {
+        Density::Regular => 1.0,
+        Density::Compact => 0.86,
+    };
+    (w * scale, h * scale)
 }
 
-/// Extra transparent room around the dashboard for shadows and overshoot of the spring.
+/// Extra transparent room around the dashboard for shadows, overshoot of the spring and
+/// stretching the open dashboard down (up to 34 px, see IslandApp.tsx).
 const SIDE_MARGIN: f64 = 48.0;
 const BOTTOM_MARGIN: f64 = 64.0;
 
@@ -115,7 +121,7 @@ pub fn layout(app: &AppHandle) {
     let Some(monitor) = monitor else { return };
 
     let scale = monitor.scale_factor();
-    let (dw, dh) = dashboard_size(settings.dashboard_size);
+    let (dw, dh) = dashboard_size(settings.dashboard_size, settings.density);
     let top = match settings.mode {
         IslandMode::Notch => 0.0,
         IslandMode::Island => settings.offset_y as f64,
@@ -348,6 +354,11 @@ pub fn island_set_hit_rect(state: tauri::State<'_, IslandState>, x: f64, y: f64,
 pub fn island_set_expanded(app: AppHandle, expanded: bool, focus: bool) {
     let state = app.state::<IslandState>();
     let was = state.expanded.swap(expanded, Ordering::SeqCst);
+    // Opening over a fullscreen app (e.g. with the shortcut) shows the island right
+    // away instead of waiting for the watcher thread to notice.
+    if expanded && state.fullscreen_hidden.swap(false, Ordering::SeqCst) {
+        update_visibility(&app);
+    }
     let Some(win) = window(&app) else { return };
     if expanded && focus {
         if !win.is_focused().unwrap_or(false) {

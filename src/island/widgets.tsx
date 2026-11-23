@@ -62,11 +62,27 @@ export function Sparkline({
   )
 }
 
+/** Windows-style indeterminate progress ring. */
+export function ProgressRing({ size = 14, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 20 20"
+      className={cn("progress-ring shrink-0", className)}
+      role="progressbar"
+      aria-label="Working"
+    >
+      <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 /** Horizontal usage bar. */
 export function Meter({ value, className }: { value: number | null | undefined; className?: string }) {
   const v = Math.max(0, Math.min(100, value ?? 0))
   return (
-    <div className={cn("h-1.5 w-full overflow-hidden rounded-full bg-white/10", className)}>
+    <div className={cn("h-1 w-full overflow-hidden rounded-full bg-white/10", className)}>
       <motion.div
         className="h-full rounded-full bg-white"
         initial={false}
@@ -173,7 +189,7 @@ export function Artwork({
   style?: React.CSSProperties
 }) {
   return (
-    <div className={cn("relative shrink-0 overflow-hidden bg-white/10", rounded, className)} style={style}>
+    <div className={cn("relative shrink-0 overflow-hidden bg-white/10 shadow-art", rounded, className)} style={style}>
       {src ? (
         <img src={src} alt="" className="h-full w-full object-cover" draggable={false} />
       ) : (
@@ -197,17 +213,17 @@ export function AmbientArt({ src, opacity = 0.45 }: { src: string | null | undef
       <img
         src={src}
         alt=""
-        className="absolute inset-0 h-full w-full scale-150 object-cover blur-3xl saturate-150"
+        className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl"
         style={{ opacity }}
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/45 to-black/70" />
+      <div className="absolute inset-0 bg-black/55" />
     </div>
   )
 }
 
 export function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-white/10 px-1.5 font-sans text-[10px] font-medium text-white/60">
+    <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[4px] bg-white/10 px-1 font-small text-[10px] font-medium text-white/60">
       {children}
     </kbd>
   )

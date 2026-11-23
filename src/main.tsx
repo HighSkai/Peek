@@ -1,12 +1,10 @@
-import { lazy, StrictMode, Suspense } from "react"
+import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-import { inTauri, windowLabel } from "./lib/ipc"
+import IslandApp from "./island/IslandApp"
+import { inTauri } from "./lib/ipc"
 import "./index.css"
 
-const IslandApp = lazy(() => import("./island/IslandApp"))
-const SettingsApp = lazy(() => import("./settings/SettingsApp"))
-
-// Block the browser context menu and accidental reloads inside the app windows.
+// Block the browser context menu and accidental reloads inside the app window.
 if (inTauri) {
   window.addEventListener("contextmenu", (e) => {
     const t = e.target as HTMLElement
@@ -15,14 +13,12 @@ if (inTauri) {
   window.addEventListener("keydown", (e) => {
     if (e.key === "F5" || (e.ctrlKey && e.key.toLowerCase() === "r")) e.preventDefault()
   })
+} else {
+  document.body.classList.add("demo-desktop")
 }
 
-windowLabel().then((label) => {
-  const isSettings = label === "settings"
-  if (!inTauri && !isSettings) document.body.classList.add("demo-desktop")
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <Suspense fallback={null}>{isSettings ? <SettingsApp /> : <IslandApp />}</Suspense>
-    </StrictMode>,
-  )
-})
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <IslandApp />
+  </StrictMode>,
+)

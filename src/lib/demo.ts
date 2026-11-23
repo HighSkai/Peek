@@ -3,11 +3,14 @@
 // interface can be developed and previewed without building the app.
 //
 // Query parameters:
-//   ?window=settings          show the settings window
+//   ?expanded=1&tab=home|system|media|ask|settings
+//   &page=general|appearance|position|motion|features|ai|about   (settings page)
 //   &mode=notch|island        &style=solid|glass
-//   &expanded=1&tab=home|system|media|ask
+//   &density=regular|compact  &reveal=always|hotkey
+//   &idle=eyes|clock|stats|none
 //   &prompt=...               send a question to the (fake) assistant
-//   &media=0                  nothing playing
+//   &media=0                  nothing playing      &playing=0   paused
+//   &banner=1                 announce a new track shortly after loading
 
 import type { ChatRequest } from "./ipc"
 import type { ChatEvent, HardwareSnapshot, MediaState, Settings } from "./types"
@@ -40,16 +43,17 @@ let settings: Settings = {
   hoverDelayMs: 350,
   shortcut: "Alt+Shift+Space",
   defaultTab: "home",
+  reveal: (params.get("reveal") as Settings["reveal"]) ?? "always",
   mode: (params.get("mode") as Settings["mode"]) ?? "island",
   style: (params.get("style") as Settings["style"]) ?? "solid",
   glassOpacity: 0.82,
+  density: (params.get("density") as Settings["density"]) ?? "regular",
   islandSize: "medium",
   dashboardSize: "medium",
   idleContent: (params.get("idle") as Settings["idleContent"]) ?? "eyes",
   showMediaActivity: true,
   mediaToast: true,
   visualizer: "audio",
-  theme: (params.get("theme") as Settings["theme"]) ?? "dark",
   clock24h: false,
   monitor: "",
   offsetX: 0,
@@ -75,7 +79,8 @@ let settings: Settings = {
     { id: "custom", name: "Custom (OpenAI-compatible)", kind: "openai", baseUrl: "http://127.0.0.1:8080/v1", model: "", needsKey: false, local: true },
   ],
   aiSystemPrompt:
-    "You are Peek, a helpful assistant that lives in the Windows Dynamic Island. Answer clearly and concisely. Use short paragraphs and Markdown when it helps.",
+    "You are Peek, an assistant built into a small panel at the top of a Windows desktop. Answer clearly and briefly. Use Markdown only when it helps.",
+  aiPlainStyle: true,
   enterAction: "ai",
   searchEngine: "google",
   searchCustomUrl: "https://www.google.com/search?q=%s",
@@ -218,7 +223,7 @@ function makeMedia(available: boolean): MediaState {
     artist: t.artist,
     album: t.album,
     artwork: artwork(t.hue),
-    playing: true,
+    playing: params.get("playing") !== "0",
     positionMs: 72_000,
     durationMs: t.durationMs,
     positionUpdatedAt: Date.now(),
@@ -258,15 +263,12 @@ setInterval(() => {
 // Chat
 // ---------------------------------------------------------------------------
 
-const CANNED = `Here's a quick rundown:
+const CANNED = `The Dynamic Island is the pill-shaped cutout at the top of recent iPhones. iOS draws live content around it:
 
-**Dynamic Island** is Apple's name for the pill-shaped cutout at the top of recent iPhones. Instead of hiding it, iOS turns it into a live surface that:
+- music, timers and calls show up at a glance
+- a tap or long press opens it into a larger panel
 
-- shows ongoing activity (music, timers, calls) at a glance,
-- expands with a spring animation when you tap or long-press it,
-- collapses back once you're done.
-
-Peek brings the same idea to Windows 11 — a tiny island that grows into a dashboard for media, system stats and quick questions like this one.`
+Peek does the same on Windows 11. The island at the top of your screen opens into a dashboard for media, system stats and short questions like this one.`
 
 export async function chat(request: ChatRequest, onEvent: (e: ChatEvent) => void) {
   let cancelled = false
@@ -278,7 +280,7 @@ export async function chat(request: ChatRequest, onEvent: (e: ChatEvent) => void
     onEvent({
       type: "sources",
       sources: [
-        { title: "Dynamic Island — Wikipedia", url: "https://en.wikipedia.org/wiki/Dynamic_Island", snippet: "" },
+        { title: "Dynamic Island - Wikipedia", url: "https://en.wikipedia.org/wiki/Dynamic_Island", snippet: "" },
         { title: "Use the Dynamic Island on your iPhone", url: "https://support.apple.com/guide/iphone/", snippet: "" },
       ],
     })
@@ -320,6 +322,8 @@ export async function invoke(cmd: string, args: Record<string, unknown> = {}): P
       }
       return
     }
+    case "shortcut_suspend":
+      return
     case "hardware_snapshot":
       return latestHardware
     case "media_state":
@@ -358,9 +362,9 @@ export async function invoke(cmd: string, args: Record<string, unknown> = {}): P
     case "list_monitors":
       return ["\\\\.\\DISPLAY1", "\\\\.\\DISPLAY2"]
     case "check_for_updates":
-      return { current: "0.1.0", latest: "0.1.0", url: "https://github.com/HighSkai/Peek/releases", available: false }
+      return { current: "0.2.0", latest: "0.2.0", url: "https://github.com/HighSkai/Peek/releases", available: false }
     case "system_info":
-      return { version: "0.1.0", mica: false, osBuild: 26100 }
+      return { version: "0.2.0", mica: false, osBuild: 26100 }
     case "open_url":
     case "open_web_search":
       window.open(

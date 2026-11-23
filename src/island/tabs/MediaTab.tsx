@@ -19,25 +19,24 @@ export function MediaTab({ settings }: { settings: Settings }) {
 
   const shown = scrub ?? pos
   return (
-    <div className="relative h-full">
-      <AmbientArt src={media.artwork} opacity={0.6} />
-      <div className="relative flex h-full items-center gap-6 px-6">
-        <Artwork src={media.artwork} className="aspect-square h-[min(78%,200px)] shadow-2xl shadow-black/50" rounded="rounded-[22px]" />
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
+    <div className="relative h-full overflow-hidden rounded-card">
+      <AmbientArt src={media.artwork} opacity={0.55} />
+      <div className="relative flex h-full items-center gap-5 px-5">
+        <Artwork src={media.artwork} className="aspect-square h-[min(80%,196px)]" rounded="rounded-card" />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="min-w-0">
-            <div className="mb-2 flex items-center gap-2">
+            <div className="mb-1.5 flex items-center gap-2">
               <AppChip media={media} />
-              <Visualizer playing={media.playing} mode={settings.visualizer} height={14} />
+              <Visualizer playing={media.playing} mode={settings.visualizer} height={12} barWidth={2.5} />
             </div>
-            <div className="line-clamp-2 text-[20px] font-semibold leading-tight">{media.title || "Unknown title"}</div>
-            <div className="mt-1 truncate text-[14px] text-white/65">{media.artist}</div>
-            {media.album && <div className="truncate text-[12.5px] text-white/40">{media.album}</div>}
+            <div className="line-clamp-2 text-[18px] font-semibold leading-tight">{media.title || "Unknown title"}</div>
+            <div className="mt-0.5 truncate text-[13px] text-white/65">{media.artist}</div>
+            {media.album && <div className="truncate text-[12px] text-white/40">{media.album}</div>}
           </div>
 
           {media.durationMs > 0 && (
             <div>
               <Slider
-                className="[&_[data-slot=slider-range]]:bg-white [&_[data-slot=slider-thumb]]:size-3 [&_[data-slot=slider-thumb]]:border-0 [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-track]]:bg-white/15"
                 value={[shown]}
                 max={media.durationMs}
                 step={1000}
@@ -49,7 +48,7 @@ export function MediaTab({ settings }: { settings: Settings }) {
                 }}
                 aria-label="Seek"
               />
-              <div className="tabular mt-1.5 flex justify-between text-[11px] text-white/45">
+              <div className="tabular mt-0.5 flex justify-between font-small text-[10.5px] text-white/45">
                 <span>{duration(shown)}</span>
                 <span>-{duration(media.durationMs - shown)}</span>
               </div>
@@ -63,7 +62,7 @@ export function MediaTab({ settings }: { settings: Settings }) {
               disabled={media.shuffle == null}
               onClick={() => api.mediaCommand("shuffle")}
             >
-              <ShuffleIcon className="size-4" />
+              <ShuffleIcon className="size-[15px]" />
             </ToggleButton>
             <Transport media={media} size="lg" />
             <ToggleButton
@@ -72,7 +71,7 @@ export function MediaTab({ settings }: { settings: Settings }) {
               disabled={media.repeat == null}
               onClick={() => api.mediaCommand("repeat")}
             >
-              {media.repeat === "track" ? <Repeat1Icon className="size-4" /> : <RepeatIcon className="size-4" />}
+              {media.repeat === "track" ? <Repeat1Icon className="size-[15px]" /> : <RepeatIcon className="size-[15px]" />}
             </ToggleButton>
           </div>
 
@@ -104,7 +103,7 @@ function ToggleButton({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        "grid size-9 place-items-center rounded-full transition disabled:opacity-25",
+        "grid size-8 place-items-center rounded-full transition-colors disabled:opacity-25",
         active ? "bg-white/15 text-white" : "text-white/55 hover:bg-white/10 hover:text-white",
       )}
     >
@@ -130,17 +129,16 @@ function VolumeRow() {
   if (!volume) return null
   const Icon = volume.muted || volume.level === 0 ? VolumeXIcon : volume.level < 0.5 ? Volume1Icon : Volume2Icon
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2.5">
       <button
-        className="grid size-7 shrink-0 place-items-center rounded-full text-white/60 transition hover:bg-white/10 hover:text-white"
+        className="grid size-6 shrink-0 place-items-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
         onClick={() => api.setVolume(undefined, !volume.muted).then(setVolume)}
         aria-label={volume.muted ? "Unmute" : "Mute"}
         title={volume.muted ? "Unmute" : "Mute"}
       >
-        <Icon className="size-4" />
+        <Icon className="size-[15px]" />
       </button>
       <Slider
-        className="[&_[data-slot=slider-range]]:bg-white/80 [&_[data-slot=slider-thumb]]:size-3 [&_[data-slot=slider-thumb]]:border-0 [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-track]]:bg-white/15"
         value={[Math.round(volume.level * 100)]}
         max={100}
         step={1}
@@ -152,7 +150,7 @@ function VolumeRow() {
         onValueCommit={() => setDragging(false)}
         aria-label="Volume"
       />
-      <span className="tabular w-8 text-right text-[11px] text-white/45">{Math.round(volume.level * 100)}</span>
+      <span className="tabular w-7 text-right font-small text-[10.5px] text-white/45">{Math.round(volume.level * 100)}</span>
     </div>
   )
 }

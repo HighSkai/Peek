@@ -2,18 +2,34 @@ import { useEffect, useRef, useState } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import { cn } from "@/lib/utils"
 
-/** Blinks every few seconds. Returns true while the eyes are closed. */
+export interface Look {
+  /** -1 (left) to 1 (right). */
+  x: number
+  /** -1 (up) to 1 (down). */
+  y: number
+}
+
+/** Blinks every few seconds, sometimes twice. Returns true while the eyes are closed. */
 function useBlink(enabled = true) {
   const [closed, setClosed] = useState(false)
   useEffect(() => {
     if (!enabled) return
     let timer: number
+    const blink = (then: () => void) => {
+      setClosed(true)
+      timer = window.setTimeout(() => {
+        setClosed(false)
+        then()
+      }, 120)
+    }
     const schedule = () => {
       timer = window.setTimeout(() => {
-        setClosed(true)
-        window.setTimeout(() => setClosed(false), 140)
-        schedule()
-      }, 2400 + Math.random() * 3800)
+        const twice = Math.random() < 0.2
+        blink(() => {
+          if (twice) timer = window.setTimeout(() => blink(schedule), 140)
+          else schedule()
+        })
+      }, 2600 + Math.random() * 4200)
     }
     schedule()
     return () => window.clearTimeout(timer)
@@ -21,18 +37,29 @@ function useBlink(enabled = true) {
   return closed
 }
 
-/** Glances around every now and then. Returns a horizontal offset between -1 and 1. */
+/** Where the eyes look when nothing is going on: mostly up and to the right, like the logo. */
+const REST: Look = { x: 0.45, y: -0.35 }
+const GLANCES: Look[] = [REST, REST, { x: -0.9, y: 0 }, { x: 0.9, y: 0.1 }, { x: 0, y: 0.5 }, { x: -0.5, y: -0.5 }]
+
+/** Glances around every few seconds. */
 function useGlance(enabled = true) {
-  const [x, setX] = useState(0)
+  const [look, setLook] = useState<Look>(REST)
   useEffect(() => {
-    if (!enabled) return
-    const id = window.setInterval(() => {
-      const r = Math.random()
-      setX(r < 0.33 ? -1 : r < 0.66 ? 1 : 0)
-    }, 3200)
-    return () => window.clearInterval(id)
+    if (!enabled) {
+      setLook(REST)
+      return
+    }
+    let timer: number
+    const next = () => {
+      timer = window.setTimeout(() => {
+        setLook(GLANCES[Math.floor(Math.random() * GLANCES.length)])
+        next()
+      }, 1800 + Math.random() * 2600)
+    }
+    next()
+    return () => window.clearTimeout(timer)
   }, [enabled])
-  return x
+  return look
 }
 
 /**
@@ -72,7 +99,7 @@ export function PeekBadge({ className }: { className?: string }) {
  * Animated mascot for empty states: peeks up over the bottom edge, blinks and
  * follows the pointer with its eyes.
  */
-export function PeekMascot({ className, glow = true }: { className?: string; glow?: boolean }) {
+export function PeekMascot({ className }: { className?: string }) {
   const reduce = useReducedMotion()
   const closed = useBlink(!reduce)
   const ref = useRef<SVGSVGElement>(null)
@@ -122,16 +149,13 @@ export function PeekMascot({ className, glow = true }: { className?: string; glo
 
   return (
     <div className={cn("relative", className)}>
-      {glow && (
-        <div className="pointer-events-none absolute inset-x-[10%] bottom-0 top-[25%] rounded-full bg-white/25 blur-3xl" />
-      )}
       <motion.svg
         ref={ref}
         viewBox="96 140 320 230"
         className="relative h-full w-full"
         initial={reduce ? false : { y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ type: "spring", bounce: 0.45, duration: 0.7, delay: 0.1 }}
+        transition={{ type: "spring", bounce: 0.35, visualDuration: 0.5, delay: 0.1 }}
         aria-hidden="true"
       >
         <path
@@ -158,28 +182,61 @@ export function PeekMascot({ className, glow = true }: { className?: string; glo
   )
 }
 
-/** Two tiny eyes for the resting island. */
-export function PeekEyes({ size = 1, animate = true }: { size?: number; animate?: boolean }) {
-  const closed = useBlink(animate)
-  const glance = useGlance(animate)
+// Eye geometry in a 26 x 14 box: two tall ovals that almost touch, like the logo.
+const EYE_CENTERS = [7.4, 18.6]
+const EYE_RX = 4.7
+const EYE_RY = 6.3
+const PUPIL_R = 2.55
+
+/**
+ * Peek's eyes for the resting island: white ovals with dark pupils that blink, glance
+ * around, and look wherever `look` points (the pointer, or down while being pulled).
+ */
+export function PeekEyes({
+  size = 14,
+  animate = true,
+  look,
+  className,
+}: {
+  /** Height in pixels. */
+  size?: number
+  animate?: boolean
+  look?: Look | null
+  className?: string
+}) {
+  const reduce = useReducedMotion()
+  const live = animate && !reduce
+  const closed = useBlink(live)
+  const glance = useGlance(live && !look)
+  const target = look ?? glance
+  const px = Math.max(-1, Math.min(1, target.x)) * (EYE_RX - PUPIL_R - 0.55)
+  const py = Math.max(-1, Math.min(1, target.y)) * (EYE_RY - PUPIL_R - 0.9)
+
   return (
-    <motion.div
-      className="flex items-center"
-      style={{ gap: 5 * size }}
-      initial={false}
-      animate={{ x: glance * 3 * size }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+    <svg
+      viewBox="0 0 26 14"
+      width={(size * 26) / 14}
+      height={size}
+      className={cn("block overflow-visible", className)}
+      aria-hidden="true"
     >
-      {[0, 1].map((i) => (
-        <motion.span
-          key={i}
-          className="block rounded-full bg-white"
-          style={{ width: 5.5 * size, height: 10 * size }}
+      {EYE_CENTERS.map((cx) => (
+        <motion.g
+          key={cx}
           initial={false}
-          animate={{ scaleY: closed ? 0.12 : 1 }}
-          transition={{ duration: 0.07 }}
-        />
+          animate={{ scaleY: closed ? 0.1 : 1 }}
+          transition={closed ? { duration: 0.06, ease: "easeIn" } : { duration: 0.12, ease: "easeOut" }}
+        >
+          <ellipse cx={cx} cy={7} rx={EYE_RX} ry={EYE_RY} fill="#fafafa" />
+          <motion.circle
+            r={PUPIL_R}
+            fill="#0a0a0a"
+            initial={false}
+            animate={{ cx: cx + px, cy: 7 + py }}
+            transition={{ type: "spring", stiffness: 420, damping: 28, mass: 0.6 }}
+          />
+        </motion.g>
       ))}
-    </motion.div>
+    </svg>
   )
 }

@@ -1,7 +1,40 @@
 import { create } from "zustand"
 import { api, EVENTS, on } from "./ipc"
 import { localTimeString } from "./format"
-import type { AudioLevel, HardwareSnapshot, MediaState, Settings, Source } from "./types"
+import type { AudioLevel, HardwareSnapshot, MediaState, Settings, Source, Tab } from "./types"
+
+// ---------------------------------------------------------------------------
+// Island UI: the open tab and the settings page, shared so any part of the
+// dashboard can jump to a section.
+// ---------------------------------------------------------------------------
+
+export type SettingsPage = "general" | "appearance" | "position" | "motion" | "features" | "ai" | "about"
+
+interface IslandUi {
+  tab: Tab
+  /** Tab to return to when settings close. */
+  lastTab: Tab
+  settingsPage: SettingsPage
+  setTab: (tab: Tab) => void
+  openSettings: (page?: SettingsPage) => void
+  closeSettings: () => void
+  setSettingsPage: (page: SettingsPage) => void
+}
+
+export const useIslandUi = create<IslandUi>((set, get) => ({
+  tab: "home",
+  lastTab: "home",
+  settingsPage: "general",
+  setTab: (tab) => set((s) => ({ tab, lastTab: s.tab === "settings" ? s.lastTab : s.tab })),
+  openSettings: (page) =>
+    set((s) => ({
+      tab: "settings",
+      lastTab: s.tab === "settings" ? s.lastTab : s.tab,
+      settingsPage: page ?? s.settingsPage,
+    })),
+  closeSettings: () => set({ tab: get().lastTab === "settings" ? "home" : get().lastTab }),
+  setSettingsPage: (page) => set({ settingsPage: page }),
+}))
 
 // ---------------------------------------------------------------------------
 // Settings

@@ -15,7 +15,7 @@ live hardware stats and an AI search bar, then push it back up.
 [![License: MIT](https://img.shields.io/badge/license-MIT-111111?style=flat-square&labelColor=3f3f3f)](LICENSE)
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-111111?style=flat-square&labelColor=3f3f3f)](#requirements)
 
-[**Download**](https://github.com/HighSkai/Peek/releases/latest) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [What's new](#whats-new-in-020) &nbsp;·&nbsp; [Getting started](#getting-started) &nbsp;·&nbsp; [AI setup](#ai-setup) &nbsp;·&nbsp; [Build from source](#building-from-source)
+[**Download**](https://github.com/HighSkai/Peek/releases/latest) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [What's new](#whats-new-in-030) &nbsp;·&nbsp; [Getting started](#getting-started) &nbsp;·&nbsp; [AI setup](#ai-setup) &nbsp;·&nbsp; [Build from source](#building-from-source)
 
 <br />
 
@@ -23,22 +23,21 @@ live hardware stats and an AI search bar, then push it back up.
 
 </div>
 
-## What's new in 0.2.0
+## What's new in 0.3.0
 
-- Everything is smaller. The dashboard went from 700 × 430 to 600 × 356 at the default size, and the resting island from 182 × 34 to 150 × 31.
-- A compact density draws the island and dashboard about 14% smaller again, for people who want it out of the way.
-- Hotkey mode keeps the island out of sight until you press the shortcut or click the tray icon.
-- Settings open inside the island instead of in a separate window.
-- The island follows your pointer when you drag it, in both directions, and a flick carries its speed into the spring.
-- Peek's eyes are real eyes now, with pupils that blink, look around and follow the pointer.
-- Text uses the Windows 11 fonts: Segoe UI Variable in its Small, Text and Display sizes.
-- A cleanup pass removed decoration that didn't do a job, and an optional *Plain answers* mode keeps AI replies free of chatbot filler. See [Design notes](#design-notes).
+- Peek updates itself. It checks GitHub, shows the release notes and installs new versions in place, with no installer to download. Automatic installs are optional. See [Updates](#updates).
+- A new layout: the island only takes the height each section needs, and Home is three short rows (now playing next to the clock, live stats, search) instead of a large music card.
+- Tabs show their names, and the close handle is the full width of the island.
+- Animations follow Windows by default, with Full, Reduced and Off to choose from. Springs are calmer, and numbers roll smoothly between values.
+- Peek's eyes can be turned off in one click.
+
+0.2.0 made everything smaller, added compact density, hotkey mode, settings inside the island, drag-to-open and drag-to-close, real eyes and the Windows 11 fonts. See the [changelog](CHANGELOG.md) for both releases.
 
 ## Features
 
 ### The island
 
-Two looks: *Dynamic Island* floats as a pill just below the top edge, and *Notch* grows out of the screen edge with curved shoulders. When nothing is going on the island shows Peek's eyes, a clock or live stats. While music plays it shows the album art and a visualizer, with a short banner when the track changes.
+Two looks: *Dynamic Island* floats as a pill just below the top edge, and *Notch* grows out of the screen edge with curved shoulders. When nothing is going on the island shows Peek's eyes, a clock, live stats or nothing at all (Settings → Appearance → *Resting island*). While music plays it shows the album art and a visualizer, with a short banner when the track changes.
 
 <div align="center">
 <img src="docs/assets/screenshots/states.png" alt="Six island states: resting with Peek's eyes, now playing, a new track banner, notch mode, a clock and live stats" width="100%" />
@@ -48,7 +47,9 @@ Everything outside the island is click-through. It hides during fullscreen games
 
 ### Drag it open, push it closed
 
-Pull the island down and the dashboard opens under the pointer. Push the open dashboard up by its header or the handle at the bottom and it shrinks back into the island. Let go and Peek uses the pointer's speed: a quick flick finishes the motion, a slow drag that hasn't gone far springs back. Pulling past fully open stretches it a little, like a rubber band. You can also click the island, scroll down on it, or press the shortcut.
+Pull the island down and the dashboard opens under the pointer. Push the open dashboard up by its header or the handle along the bottom (the whole width of the island) and it shrinks back. Let go and Peek uses the pointer's speed: a quick flick finishes the motion, a slow drag that hasn't gone far springs back. Pulling past fully open stretches it a little, like a rubber band. You can also click the island, scroll down on it, or press the shortcut; tap the handle or press <kbd>Esc</kbd> to close.
+
+The open island is only as tall as the section you're on. Home is a short strip of three rows; System, Ask and Settings grow taller, and the island springs between them.
 
 <div align="center">
 <img src="docs/assets/screenshots/gestures.png" alt="Three frames: the resting island stretching as it's pulled down with the eyes looking down, the dashboard opening under the pointer, and the dashboard shrinking as it's pushed back up" width="100%" />
@@ -65,6 +66,18 @@ Pick a density in Settings → Appearance. Compact is the same layout drawn abou
 ### Hotkey mode
 
 Set *Show the island* to *On shortcut* in Settings → General (or tick *Show only on shortcut* in the tray menu). The island then stays tucked above the top edge of the screen. Press the shortcut, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> by default, and it slides down and opens; close it and it slides away again. It also opens over fullscreen apps.
+
+### Animations
+
+Settings → Motion → *Animations* has four levels. *System* (the default) follows Windows: Settings → Accessibility → Visual effects → Animation effects. *Full* uses springs modeled on Apple's presets, with a little bounce when the island opens and none when it closes. *Reduced* replaces movement with short fades, and *Off* makes every change instant. Live numbers roll from one value to the next at the full level.
+
+### Updates
+
+Settings → Updates shows whether a newer version is out, with its release notes. **Install and restart** downloads the installer from this repository's latest release, checks its size and SHA-256 against what GitHub publishes for it, runs it silently and starts Peek again. Peek checks when it starts and every 6 hours (you can turn that off), and *Install updates automatically* does the whole thing while the island is closed. *Check for updates…* is also in the tray menu, and the settings gear shows a dot when an update is ready.
+
+<div align="center">
+<img src="docs/assets/screenshots/updates.png" alt="The Updates page inside the island: Peek 0.3.1 is available with an Install and restart button, the last check time, and switches to check and install automatically" width="70%" />
+</div>
 
 ### Now playing
 
@@ -101,15 +114,15 @@ Ask a question and the answer streams in, formatted with Markdown. Press <kbd>Ct
 
 ### Settings, inside the island
 
-The gear in the dashboard opens settings in place, laid out like the Windows 11 Settings app. It covers appearance, density and size, position and monitor, motion (speed, bounce, hover), startup, hotkey mode and the shortcut, every feature toggle, and AI providers. Turn off anything you don't use and it stops running in the background. *Settings…* in the tray menu opens the same page.
+The gear in the dashboard opens settings in place, laid out like the Windows 11 Settings app. It covers the resting island (eyes, clock, stats or off), appearance, density and size, position and monitor, animations, startup, hotkey mode and the shortcut, every feature toggle, AI providers and updates. Turn off anything you don't use and it stops running in the background. *Settings…* in the tray menu opens the same page.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/assets/screenshots/settings.png" alt="Settings inside the island, Appearance page, with Dynamic Island and Notch options, surface and density" /></td>
+    <td width="50%"><img src="docs/assets/screenshots/settings.png" alt="Settings inside the island, Appearance page, with the resting island set to Eyes, Clock, Stats or Off, and the Dynamic Island and Notch styles" /></td>
     <td width="50%"><img src="docs/assets/screenshots/hotkey.png" alt="Settings inside the island, General page, with Show the island set to On shortcut and the Alt+Shift+Space shortcut" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>Appearance and density</sub></td>
+    <td align="center"><sub>Resting island, style and density</sub></td>
     <td align="center"><sub>Hotkey mode and the shortcut</sub></td>
   </tr>
 </table>
@@ -139,6 +152,7 @@ Peek appears at the top of your screen and adds an icon to the system tray. Righ
 | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> (changeable) | Open or close the dashboard with the search bar focused |
 | Push the header or the bottom handle up, or tap the handle | Close the dashboard |
 | <kbd>Esc</kbd> or click elsewhere | Close the dashboard |
+| <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>4</kbd> | Switch between Home, Music, System and Ask |
 | <kbd>Enter</kbd> in the search bar | Ask the AI (or search the web, if you swap them in settings) |
 | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Do the other one |
 | Pin button in the dashboard | Keep it open while you work in other windows |
@@ -169,7 +183,7 @@ Peek has no accounts, analytics or telemetry. It only talks to the network when 
 
 - the AI and search providers you configure, with the questions you send them;
 - your browser's search engine when you search the web;
-- GitHub, when you press **Check for updates**.
+- GitHub, to check for and download updates (at startup and every 6 hours unless you turn it off in Settings → Updates).
 
 Settings are saved in `%APPDATA%\io.github.highskai.peek`. API keys are saved in Windows Credential Manager under **Peek**. Local models keep everything on your PC.
 
@@ -179,7 +193,9 @@ Peek aims to look like part of Windows rather than a web page.
 
 - Type is Segoe UI Variable, the Windows 11 UI font, in its three optical sizes: Small for captions, Text for body copy and Display for big numbers like the clock. Code uses Cascadia Mono.
 - Labels and headings are in sentence case. There are two corner radii (cards and controls) and one shadow (album art).
+- The layout follows Apple's guidance for the expanded Dynamic Island ([Live Activities](https://developer.apple.com/design/human-interface-guidelines/live-activities)): use only the space you need, change height with the content, and keep margins concentric with the outer corners. Open-notch apps on the Mac such as [boring.notch](https://github.com/TheBoredTeam/boring.notch), [Atoll](https://github.com/FI-153/Atoll) and [NotchNook](https://lo.cafe/notchnook) informed the wide, short Home row with media beside the time.
 - The pull-down gesture is direct manipulation: the island's size is driven by the pointer, then handed to a spring with the pointer's velocity. Content fades and scales with how far open the island is, so it never pops in.
+- Springs use the duration and bounce model from Apple's [Animate with springs](https://developer.apple.com/videos/play/wwdc2023/10158/) talk: 15% bounce when opening, none when closing. [Motion](https://motion.dev) runs them, and [NumberFlow](https://number-flow.barvian.me) rolls the numbers.
 - A pass with the [zero-slop / no-slop](https://github.com/eid0lon/zero-slop) pattern catalog removed common tells of generated interfaces: uppercase tracked micro-labels, cards nested in cards, glow and shimmer effects, generic sparkle icons, suggested-prompt chips and em dashes in copy.
 
 ## Building from source
@@ -214,13 +230,14 @@ Peek/
 │     ├─ ai.rs              streaming chat, model lists, web grounding, plain answers
 │     ├─ settings.rs        persisted settings
 │     ├─ secrets.rs         Windows Credential Manager
+│     ├─ updates.rs         check GitHub releases, download, verify and install updates
 │     └─ tray.rs            tray icon and menu
 └─ docs/assets/             logo and screenshots
 ```
 
 ### Built with
 
-[Tauri 2](https://tauri.app) · [React](https://react.dev) · [shadcn/ui](https://ui.shadcn.com) · [Radix UI](https://www.radix-ui.com) · [Tailwind CSS](https://tailwindcss.com) · [Motion](https://motion.dev) · [Lucide](https://lucide.dev) · [sysinfo](https://github.com/GuillaumeGomez/sysinfo) · [windows-rs](https://github.com/microsoft/windows-rs) · [nvml-wrapper](https://github.com/rust-nvml/nvml-wrapper)
+[Tauri 2](https://tauri.app) · [React](https://react.dev) · [shadcn/ui](https://ui.shadcn.com) · [Radix UI](https://www.radix-ui.com) · [Tailwind CSS](https://tailwindcss.com) · [Motion](https://motion.dev) · [NumberFlow](https://number-flow.barvian.me) · [Lucide](https://lucide.dev) · [sysinfo](https://github.com/GuillaumeGomez/sysinfo) · [windows-rs](https://github.com/microsoft/windows-rs) · [nvml-wrapper](https://github.com/rust-nvml/nvml-wrapper)
 
 Design and writing checks: [zero-slop](https://github.com/eid0lon/zero-slop) · [humanizer](https://github.com/blader/humanizer)
 

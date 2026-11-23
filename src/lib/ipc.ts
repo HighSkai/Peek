@@ -13,6 +13,7 @@ import type {
   MediaState,
   Settings,
   SystemInfo,
+  UpdateEvent,
   UpdateInfo,
   VolumeState,
 } from "./types"
@@ -112,6 +113,15 @@ export const api = {
   suspendShortcut: (suspended: boolean) => call<void>("shortcut_suspend", { suspended }),
 
   checkForUpdates: () => call<UpdateInfo>("check_for_updates"),
+  /** Download, verify and install the latest release. Peek quits and restarts on success. */
+  installUpdate: async (onEvent: (e: UpdateEvent) => void) => {
+    if (inTauri) {
+      const channel = new Channel<UpdateEvent>()
+      channel.onmessage = onEvent
+      return invoke<void>("install_update", { onEvent: channel })
+    }
+    return (await demo()).installUpdate(onEvent)
+  },
   openUrl: (url: string) => call<void>("open_url", { url }),
   quit: () => call<void>("quit_app"),
   systemInfo: () => call<SystemInfo>("system_info"),

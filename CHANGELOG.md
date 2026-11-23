@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.3.0 (2026-11-23)
+
+### Updates without reinstalling
+
+- New Updates page in settings. Peek checks GitHub when it starts and every 6 hours, shows the release notes and installs a new version in place: it downloads the installer, checks its size and SHA-256 against the release, runs it silently and restarts. No installer window, no download folder.
+- *Install updates automatically* does all of that on its own while the island is closed. It's off by default.
+- *Check for updates…* in the tray menu, and a dot on the settings gear when an update is ready.
+- Updating from 0.2.0 still needs this one installer; later versions update themselves.
+
+### Layout
+
+- The open island only takes the height its section needs and springs between sections, following Apple's guidance for the expanded Dynamic Island. Home is 264 px tall (was 356), Music 272, System and Ask about 380, Settings 404.
+- Home is three short rows: a compact now-playing strip (62 px art, title, artist, progress and controls) beside the clock, four live-stat tiles, then search. The large music card is gone.
+- Section tabs show their names (Home, Music, System, Ask), not just icons. Ctrl+1 to Ctrl+4 switch between them.
+- 12 px margins all round, concentric with the island's corners.
+
+### Closing
+
+- The handle along the bottom is now the full width of the island and 22 px tall instead of a thin strip. It stays attached to the bottom edge while you drag, grows when you point at it, and shows a grab cursor. Tap it or push it up to close.
+
+### Animations
+
+- New *Animations* setting: System (default), Full, Reduced or Off. System follows Windows' Animation effects setting (Accessibility > Visual effects).
+- Full uses Apple's spring presets: a short "snappy" spring with a little bounce when opening (15%, was 28%) and a "smooth" spring with none when closing.
+- Reduced swaps movement for short fades and quick size changes with no overshoot. Off makes everything instant.
+- Numbers (stats, clock) roll smoothly from one value to the next with [NumberFlow](https://number-flow.barvian.me).
+
+### Eyes
+
+- Appearance now opens with *Resting island: Eyes, Clock, Stats or Off*, so the eyes can be turned off in one click for both the island and the notch.
+
 ## 0.2.0 (2026-11-23)
 
 ### Smaller, and your choice of how small

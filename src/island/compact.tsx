@@ -1,7 +1,9 @@
 import { CpuIcon, MemoryStickIcon, PauseIcon, PlayIcon, ThermometerIcon } from "lucide-react"
+import { Percent, Temperature } from "@/components/animated-number"
 import { PeekEyes, type Look } from "@/components/peek-mascot"
 import { api } from "@/lib/ipc"
-import { clock, NONE, temp } from "@/lib/format"
+import { clock } from "@/lib/format"
+import { useMotion } from "@/lib/motion"
 import { useHardware } from "@/lib/store"
 import type { MediaState, Settings } from "@/lib/types"
 import { useNow } from "./hooks"
@@ -11,10 +13,16 @@ import { Artwork, Visualizer } from "./widgets"
 
 export function CompactIdle({ settings, height, look }: { settings: Settings; height: number; look?: Look | null }) {
   const now = useNow(settings.idleContent === "clock" ? 1000 : 60_000)
+  const { level } = useMotion()
   if (settings.idleContent === "eyes") {
     return (
       <div className="absolute inset-0 grid place-items-center">
-        <PeekEyes size={Math.round(height * 0.48)} animate={settings.animations} look={look} />
+        <PeekEyes
+          size={Math.round(height * 0.48)}
+          animate={level !== "off"}
+          wander={level === "full"}
+          look={look}
+        />
       </div>
     )
   }
@@ -36,17 +44,18 @@ export function CompactStats({ settings }: { settings: Settings }) {
   const snap = useHardware((s) => s.snapshot)
   const ram = snap && snap.memory.total ? (snap.memory.used / snap.memory.total) * 100 : null
   const t = snap?.cpu.temperature ?? snap?.gpus[0]?.temperature ?? null
-  const item = (icon: React.ReactNode, value: string, label: string) => (
-    <span className="flex items-center gap-1" aria-label={`${label} ${value}`}>
+  const item = (icon: React.ReactNode, value: React.ReactNode, label: string) => (
+    <span className="flex items-center gap-1" title={label}>
       {icon}
       <span className="tabular">{value}</span>
     </span>
   )
   return (
     <div className="absolute inset-0 flex items-center justify-center gap-2.5 px-3 font-small text-[11px] font-semibold text-white">
-      {item(<CpuIcon className="size-3 text-white/55" />, snap ? `${Math.round(snap.cpu.usage)}%` : NONE, "CPU")}
-      {item(<MemoryStickIcon className="size-3 text-white/55" />, ram != null ? `${Math.round(ram)}%` : NONE, "Memory")}
-      {t != null && item(<ThermometerIcon className="size-3 text-white/55" />, temp(t, settings.temperatureUnit), "Temperature")}
+      {item(<CpuIcon className="size-3 text-white/55" />, <Percent value={snap?.cpu.usage} />, "CPU")}
+      {item(<MemoryStickIcon className="size-3 text-white/55" />, <Percent value={ram} />, "Memory")}
+      {t != null &&
+        item(<ThermometerIcon className="size-3 text-white/55" />, <Temperature celsius={t} unit={settings.temperatureUnit} />, "Temperature")}
     </div>
   )
 }

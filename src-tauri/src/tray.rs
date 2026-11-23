@@ -68,13 +68,14 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         None::<&str>,
     )?;
     let prefs = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+    let updates = MenuItem::with_id(app, "updates", "Check for updates…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Peek", true, None::<&str>)?;
     MenuBuilder::new(app)
         .items(&[&open, &ask])
         .item(&PredefinedMenuItem::separator(app)?)
         .items(&[&show, &hotkey, &notch, &isl])
         .item(&PredefinedMenuItem::separator(app)?)
-        .items(&[&prefs, &quit])
+        .items(&[&prefs, &updates, &quit])
         .build()
 }
 
@@ -111,6 +112,8 @@ fn handle_menu(app: &AppHandle, id: &str) {
         "mode-notch" => patch_settings(app, serde_json::json!({ "mode": IslandMode::Notch })),
         "mode-island" => patch_settings(app, serde_json::json!({ "mode": IslandMode::Island })),
         "settings" => crate::open_settings_panel(app),
+        // "settings:<page>" opens that settings page; see expand() in IslandApp.tsx.
+        "updates" => island::send_command(app, "expand", Some("settings:updates"), false),
         "quit" => crate::quit(app),
         _ => {}
     }

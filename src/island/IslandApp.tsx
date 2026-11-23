@@ -3,9 +3,11 @@ import {
   animate,
   AnimatePresence,
   motion,
+  MotionConfig,
   useMotionValue,
   useTransform,
   type AnimationPlaybackControls,
+  type MotionValue,
 } from "motion/react"
 import type { Look } from "@/components/peek-mascot"
 import { PopoverBoundary } from "@/components/ui/select"
@@ -14,12 +16,14 @@ import {
   ACTIVITY_EXTRA,
   BANNER,
   COMPACT,
-  DASHBOARD,
   DASHBOARD_RADIUS,
+  dashboardSize,
   DENSITY_SCALE,
+  HANDLE_H,
   scaled,
   STATS_EXTRA,
 } from "@/lib/layout"
+import { islandTransition, MotionLevelContext, useResolvedMotion } from "@/lib/motion"
 import {
   startAudioSync,
   startHardwareSync,
@@ -29,6 +33,8 @@ import {
   useIslandUi,
   useMedia,
   useSettings,
+  useUpdates,
+  type SettingsPage,
 } from "@/lib/store"
 import type { Settings, Tab } from "@/lib/types"
 import { Banner, CompactActivity, CompactIdle, CompactStats } from "./compact"
@@ -42,6 +48,9 @@ type Size = { w: number; h: number }
 const DRAG_SLOP = 4
 /** How far past fully open the dashboard can be stretched. */
 const STRETCH = 34
+/** First update check after launch, then every few hours. */
+const UPDATE_FIRST_CHECK_MS = 20_000
+const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
@@ -80,6 +89,8 @@ function Island({ settings }: { settings: Settings }) {
   const media = useMedia((s) => s.media)
   const trackChanges = useMedia((s) => s.trackChanges)
   const tab = useIslandUi((s) => s.tab)
+  const level = useResolvedMotion(settings.motion)
+  const speed = settings.animationSpeed || 1
 
   const [expanded, setExpanded] = useState(false)
   const [hovered, setHovered] = useState(false)
@@ -99,19 +110,27 @@ function Island({ settings }: { settings: Settings }) {
   pinnedRef.current = pinned
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+  const levelRef = useRef(level)
+  levelRef.current = level
   const focusedRef = useRef(false)
   const reasonRef = useRef<Reason>("click")
   const dragRef = useRef<DragState | null>(null)
 
   // ----- expand / collapse ------------------------------------------------
 
-  const expand = useCallback((reason: Reason, opts?: { tab?: Tab | null; focusSearch?: boolean }) => {
+  const expand = useCallback((reason: Reason, opts?: { tab?: string | null; focusSearch?: boolean }) => {
     reasonRef.current = reason
     setBanner(false)
     const ui = useIslandUi.getState()
-    if (opts?.tab === "settings") ui.openSettings()
-    else if (opts?.tab) ui.setTab(opts.tab)
-    else if (!expandedRef.current) ui.setTab(settingsRef.current.defaultTab)
+    const target = opts?.tab
+    if (target?.startsWith("settings")) {
+      // "settings" or "settings:<page>"
+      ui.openSettings((target.split(":")[1] as SettingsPage | undefined) || undefined)
+    } else if (target) {
+      ui.setTab(target as Tab)
+    } else if (!expandedRef.current) {
+      ui.setTab(settingsRef.current.defaultTab)
+    }
     if (opts?.focusSearch) setSearchNonce((n) => n + 1)
     setExpanded(true)
     api.setExpanded(true, reason !== "hover")
@@ -131,7 +150,7 @@ function Island({ settings }: { settings: Settings }) {
       const params = new URLSearchParams(location.search)
       const prompt = params.get("prompt")
       const page = params.get("page")
-      if (page) useIslandUi.getState().setSettingsPage(page as never)
+      if (page) useIslandUi.getState().setSettingsPage(page as SettingsPage)
       if (prompt) {
         setTimeout(() => {
           expand("command", { tab: "ask" })
@@ -217,15 +236,39 @@ function Island({ settings }: { settings: Settings }) {
     return () => window.clearTimeout(t)
   }, [media?.available, media?.playing])
 
+  // ----- updates -------------------------------------------------------------
+
+  useEffect(() => {
+    if (!settings.updateCheck) return
+    const run = () => void useUpdates.getState().check()
+    const first = window.setTimeout(run, UPDATE_FIRST_CHECK_MS)
+    const every = window.setInterval(run, UPDATE_INTERVAL_MS)
+    return () => {
+      window.clearTimeout(first)
+      window.clearInterval(every)
+    }
+  }, [settings.updateCheck])
+
+  // Install automatically (if allowed) once the island is closed, so a restart never
+  // interrupts anything.
+  const updateAvailable = useUpdates((s) => !!s.info?.available)
+  const updatePhase = useUpdates((s) => s.phase)
+  useEffect(() => {
+    if (!settings.updateAutoInstall || !updateAvailable || expanded || updatePhase !== "idle") return
+    const t = window.setTimeout(() => void useUpdates.getState().install(), 5000)
+    return () => window.clearTimeout(t)
+  }, [settings.updateAutoInstall, updateAvailable, expanded, updatePhase])
+
   // ----- layout --------------------------------------------------------------
 
   const scale = DENSITY_SCALE[settings.density] ?? 1
-  const layout = DASHBOARD[settings.dashboardSize]
+  const layout = dashboardSize(settings, tab)
   const dash = scaled(layout, scale)
   const compactLayout = COMPACT[settings.islandSize]
   const notch = settings.mode === "notch"
   const top = notch ? 0 : settings.offsetY
   const hotkey = settings.reveal === "hotkey"
+  const growOnHover = settings.hoverEffect && level === "full"
 
   const hasActivity = settings.featureMedia && settings.showMediaActivity && !!media?.available && recentlyPlayed
   const closedView: Exclude<View, "dashboard"> = hotkey
@@ -249,12 +292,12 @@ function Island({ settings }: { settings: Settings }) {
     if (closedView === "stats") w += STATS_EXTRA
     if (notch) h += 2
     const s = scaled({ w, h }, scale)
-    if (hovered && settings.hoverEffect && settings.animations && closedView !== "hidden") {
+    if (hovered && growOnHover && closedView !== "hidden") {
       s.w += 8
       s.h += 3
     }
     return s
-  }, [closedView, compactLayout, scale, notch, hovered, settings.hoverEffect, settings.animations])
+  }, [closedView, compactLayout, scale, notch, hovered, growOnHover])
 
   const rest = view === "dashboard" ? dash : closed
   /** Hotkey mode tucks the island above the top edge of the screen. */
@@ -293,15 +336,15 @@ function Island({ settings }: { settings: Settings }) {
   const shadow = useTransform(() => {
     const p = clamp(progress.get(), 0, 1)
     const ring = glass ? lerp(0.08, 0.1, p) : lerp(0, 0.06, p)
-    return `0px ${lerp(6, 22, p)}px ${lerp(18, 56, p)}px -${lerp(8, 14, p)}px rgba(0,0,0,${lerp(0.35, 0.7, p)}), inset 0px 0px 0px 1px rgba(255,255,255,${ring})`
+    return `0px ${lerp(6, 20, p)}px ${lerp(18, 50, p)}px -${lerp(8, 14, p)}px rgba(0,0,0,${lerp(0.35, 0.65, p)}), inset 0px 0px 0px 1px rgba(255,255,255,${ring})`
   })
   // The dashboard fades in step with how far open the island is, and scales with its
   // width, so while dragging or springing it looks drawn out of (and back into) the
   // island instead of being cropped by it.
   const dashOpacity = useTransform(progress, [0.1, 0.55], [0, 1])
+  const dashScale = useTransform(() => clamp(w.get() / Math.max(1, geo.current.dash.w), 0.55, 1))
   // The resting content (eyes, music, clock) gives way over the first part of the pull.
   const compactOpacity = useTransform(progress, [0.02, 0.14], [1, 0])
-  const dashScale = useTransform(() => clamp(w.get() / Math.max(1, geo.current.dash.w), 0.55, 1))
 
   // ----- hit testing -----------------------------------------------------------
 
@@ -340,8 +383,8 @@ function Island({ settings }: { settings: Settings }) {
   const target = useRef<{ w: number; h: number; y: number } | null>(null)
 
   /**
-   * Spring the island to a size. `vw`/`vh` carry the speed of a released drag into the
-   * spring, which is what makes a flick feel like it has weight.
+   * Move the island to a size. At the full level this is a spring; `vw`/`vh` carry the
+   * speed of a released drag into it, which is what makes a flick feel like it has weight.
    */
   const springTo = useCallback(
     (size: Size, toY: number, opts: { vw?: number; vh?: number; empty?: boolean } = {}) => {
@@ -351,21 +394,16 @@ function Island({ settings }: { settings: Settings }) {
 
       const grow = size.h - h.get()
       const kind = grow > 24 ? "open" : grow < -24 ? "close" : "morph"
-      const speed = s.animationSpeed || 1
-      const duration = (kind === "open" ? 0.46 : kind === "close" ? 0.4 : 0.34) / speed
-      const bounce = kind === "open" ? s.bounce : kind === "close" ? s.bounce * 0.6 : s.bounce * 0.8
-      const spring = (velocity = 0) =>
-        s.animations
-          ? { type: "spring" as const, visualDuration: duration, bounce, velocity }
-          : { duration: 0 }
+      const base = { speed: s.animationSpeed || 1, bounce: s.springBounce }
+      const lvl = levelRef.current
 
       // Cover both the current and the target size while moving; trim it at the end.
       report({ w: Math.max(w.get(), size.w), h: Math.max(h.get(), size.h) })
       const id = ++runId.current
       const list = [
-        animate(w, size.w, spring(opts.vw)),
-        animate(h, size.h, spring(opts.vh)),
-        animate(y, toY, spring(0)),
+        animate(w, size.w, islandTransition(lvl, kind, { ...base, velocity: opts.vw })),
+        animate(h, size.h, islandTransition(lvl, kind, { ...base, velocity: opts.vh })),
+        animate(y, toY, islandTransition(lvl, kind, base)),
       ]
       anims.current = list
       Promise.all(list).then(() => {
@@ -375,7 +413,7 @@ function Island({ settings }: { settings: Settings }) {
     [w, h, y, report],
   )
 
-  // Follow the resting size: view changes, hover, settings. Skipped mid-drag.
+  // Follow the resting size: view and section changes, hover, settings. Skipped mid-drag.
   const mounted = useRef(false)
   useLayoutEffect(() => {
     const empty = view === "hidden"
@@ -412,8 +450,8 @@ function Island({ settings }: { settings: Settings }) {
   // ----- gestures ----------------------------------------------------------------
   //
   // One gesture covers both directions. Pull the resting island down and the dashboard
-  // opens under the pointer; grab the open dashboard by its header or the handle at the
-  // bottom and push it back up to close. Letting go hands the pointer's speed to the
+  // opens under the pointer; grab the open dashboard by its header or the handle along
+  // the bottom and push it back up to close. Letting go hands the pointer's speed to the
   // spring, so a quick flick finishes the motion and a slow drag can be put back.
 
   const applyDrag = (d: DragState) => {
@@ -465,7 +503,7 @@ function Island({ settings }: { settings: Settings }) {
     const d = dragRef.current
     if (!d) {
       // Peek watches the pointer while it's over the resting island.
-      if (!expandedRef.current && view === "idle") {
+      if (!expandedRef.current && view === "idle" && levelRef.current === "full") {
         const r = e.currentTarget.getBoundingClientRect()
         const x = clamp(((e.clientX - (r.left + r.width / 2)) / (r.width / 2)) * 1.3, -1, 1)
         const yy = clamp((e.clientY - (r.top + r.height / 2)) / (r.height / 2), -1, 1)
@@ -474,16 +512,18 @@ function Island({ settings }: { settings: Settings }) {
       return
     }
     const g = geo.current
-    const range = Math.max(1, g.dash.h - g.closed.h)
     if (!d.active) {
       if (Math.abs(e.clientY - d.startY) < DRAG_SLOP) return
       // Take over from any running spring, starting from wherever the island is now.
       anims.current.forEach((a) => a.stop())
+      // Pulling the resting island always opens the default section.
+      if (d.from === 0) useIslandUi.getState().setTab(settingsRef.current.defaultTab)
       d.active = true
       d.startY = e.clientY
-      d.base = clamp((h.get() - g.closed.h) / range, 0, 1)
+      d.base = clamp((h.get() - g.closed.h) / Math.max(1, g.dash.h - g.closed.h), 0, 1)
       setPulling(true)
     }
+    const range = Math.max(1, g.dash.h - g.closed.h)
     const now = performance.now()
     d.samples.push({ t: now, y: e.clientY })
     if (d.samples.length > 8) d.samples.shift()
@@ -543,10 +583,13 @@ function Island({ settings }: { settings: Settings }) {
   // ----- render --------------------------------------------------------------------
 
   const background = glass ? `rgba(12,12,12,${settings.glassOpacity})` : "#000"
-  const anim = settings.animations
   const eyesLook: Look | null = pulling && !expanded ? { x: 0, y: 1 } : look
   // While the resting island is being pulled open, both layers are drawn and cross-fade.
   const showCompact = view !== "dashboard" || (dragOpen && !expanded)
+  const motionValue = useMemo(
+    () => ({ level, speed, bounce: settings.springBounce }),
+    [level, speed, settings.springBounce],
+  )
 
   const compactContent = (() => {
     switch (closedView) {
@@ -563,87 +606,134 @@ function Island({ settings }: { settings: Settings }) {
     }
   })()
 
+  const compactEnter =
+    level === "full"
+      ? { initial: { opacity: 0, scale: 0.85 }, exit: { opacity: 0, scale: 0.92, transition: { duration: 0.1 } } }
+      : level === "reduced"
+        ? { initial: { opacity: 0 }, exit: { opacity: 0, transition: { duration: 0.1 } } }
+        : { initial: false as const, exit: { opacity: 0, transition: { duration: 0 } } }
+
   return (
-    <div className="pointer-events-none absolute inset-x-0 flex justify-center" style={{ top }}>
-      <motion.div
-        className="pointer-events-auto relative"
-        style={{ width: w, height: h, y }}
-        onMouseEnter={inTauri ? undefined : () => setHovered(true)}
-        onMouseLeave={inTauri ? undefined : () => setHovered(false)}
-      >
-        {notch && <NotchEars color={background} />}
-        <motion.div
-          ref={setSurface}
-          data-dragging={pulling || undefined}
-          className="group/island absolute inset-0 overflow-hidden"
-          style={{
-            background,
-            backdropFilter: glass ? "blur(24px) saturate(140%)" : undefined,
-            borderTopLeftRadius: topRadius,
-            borderTopRightRadius: topRadius,
-            borderBottomLeftRadius: radius,
-            borderBottomRightRadius: radius,
-            boxShadow: shadow,
-          }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerLeave={() => !dragRef.current && setLook(null)}
-          onPointerUp={(e) => endDrag(e)}
-          onPointerCancel={(e) => endDrag(e, true)}
-          onLostPointerCapture={(e) => dragRef.current && endDrag(e, true)}
-          onWheel={(e) => {
-            if (!expanded && e.deltaY > 0 && view !== "hidden") expand("scroll")
-          }}
-        >
-          <PopoverBoundary.Provider value={surface}>
-            <AnimatePresence initial={false}>
-              {showCompact && (
-                <motion.div
-                  key={closedView}
-                  className="absolute inset-0"
-                  initial={anim ? { opacity: 0, scale: 0.82 } : false}
-                  animate={{ opacity: 1, scale: 1, transition: { duration: 0.24, delay: anim ? 0.08 : 0, ease: [0.2, 0.8, 0.2, 1] } }}
-                  exit={anim ? { opacity: 0, scale: 0.9, transition: { duration: 0.1 } } : { opacity: 0, transition: { duration: 0 } }}
-                >
-                  <motion.div className="absolute inset-0" style={{ zoom: scale, opacity: compactOpacity }}>
-                    {compactContent}
-                  </motion.div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <AnimatePresence initial={false}>
-              {view === "dashboard" && (
-                <motion.div
-                  key="dashboard"
-                  className="absolute inset-0"
-                  exit={{ opacity: 0, transition: { duration: anim ? 0.14 : 0 } }}
-                >
-                  <motion.div
-                    className="absolute inset-x-0 top-0"
-                    style={{ opacity: dashOpacity, scale: dashScale, transformOrigin: "50% 0%" }}
-                  >
-                    <div
-                      className="absolute left-1/2 top-0 -translate-x-1/2"
-                      style={{ width: layout.w, height: layout.h, zoom: scale }}
+    <MotionLevelContext.Provider value={motionValue}>
+      <MotionConfig reducedMotion={level === "full" ? "never" : "always"} skipAnimations={level === "off"}>
+        <div className="pointer-events-none absolute inset-x-0 flex justify-center" style={{ top }}>
+          <motion.div
+            className="pointer-events-auto relative"
+            style={{ width: w, height: h, y }}
+            onMouseEnter={inTauri ? undefined : () => setHovered(true)}
+            onMouseLeave={inTauri ? undefined : () => setHovered(false)}
+          >
+            {notch && <NotchEars color={background} />}
+            <motion.div
+              ref={setSurface}
+              data-dragging={pulling || undefined}
+              className="group/island absolute inset-0 overflow-hidden"
+              style={{
+                background,
+                backdropFilter: glass ? "blur(24px) saturate(140%)" : undefined,
+                borderTopLeftRadius: topRadius,
+                borderTopRightRadius: topRadius,
+                borderBottomLeftRadius: radius,
+                borderBottomRightRadius: radius,
+                boxShadow: shadow,
+              }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerLeave={() => !dragRef.current && setLook(null)}
+              onPointerUp={(e) => endDrag(e)}
+              onPointerCancel={(e) => endDrag(e, true)}
+              onLostPointerCapture={(e) => dragRef.current && endDrag(e, true)}
+              onWheel={(e) => {
+                if (!expanded && e.deltaY > 0 && view !== "hidden") expand("scroll")
+              }}
+            >
+              <PopoverBoundary.Provider value={surface}>
+                <AnimatePresence initial={false}>
+                  {showCompact && (
+                    <motion.div
+                      key={closedView}
+                      className="absolute inset-0"
+                      initial={compactEnter.initial}
+                      animate={{
+                        opacity: 1,
+                        scale: 1,
+                        transition:
+                          level === "off" ? { duration: 0 } : { duration: 0.24, delay: 0.08, ease: [0.2, 0, 0, 1] },
+                      }}
+                      exit={compactEnter.exit}
                     >
-                      <Dashboard
-                        settings={settings}
-                        width={layout.w}
-                        height={layout.h}
-                        pinned={pinned}
-                        setPinned={setPinned}
-                        onCollapse={collapse}
-                        searchNonce={searchNonce}
-                      />
-                    </div>
-                  </motion.div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </PopoverBoundary.Provider>
-        </motion.div>
-      </motion.div>
-    </div>
+                      <motion.div className="absolute inset-0" style={{ zoom: scale, opacity: compactOpacity }}>
+                        {compactContent}
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <AnimatePresence initial={false}>
+                  {view === "dashboard" && (
+                    <motion.div
+                      key="dashboard"
+                      className="absolute inset-0"
+                      exit={{ opacity: 0, transition: { duration: level === "off" ? 0 : 0.14 } }}
+                    >
+                      <motion.div
+                        className="absolute inset-x-0 top-0"
+                        style={{
+                          opacity: dashOpacity,
+                          scale: level === "full" ? dashScale : 1,
+                          transformOrigin: "50% 0%",
+                        }}
+                      >
+                        <div
+                          className="absolute left-1/2 top-0 -translate-x-1/2"
+                          style={{ width: layout.w, height: layout.h, zoom: scale }}
+                        >
+                          <Dashboard
+                            settings={settings}
+                            width={layout.w}
+                            height={layout.h}
+                            pinned={pinned}
+                            setPinned={setPinned}
+                            onCollapse={collapse}
+                            searchNonce={searchNonce}
+                          />
+                        </div>
+                      </motion.div>
+                      <CloseHandle opacity={dashOpacity} scale={scale} color={background} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </PopoverBoundary.Provider>
+            </motion.div>
+          </motion.div>
+        </div>
+      </MotionConfig>
+    </MotionLevelContext.Provider>
+  )
+}
+
+/**
+ * The handle along the bottom edge of the open island. It's attached to the island's
+ * edge (not the content), so it stays under the pointer while dragging. The whole strip
+ * is the target, not just the visible bar.
+ */
+function CloseHandle({ opacity, scale, color }: { opacity: MotionValue<number>; scale: number; color: string }) {
+  return (
+    <motion.div
+      data-drag-handle
+      data-grabber
+      role="button"
+      aria-label="Close. Drag up or tap."
+      title="Drag up or tap to close"
+      className="group/handle absolute inset-x-0 bottom-0 flex cursor-grab items-center justify-center active:cursor-grabbing"
+      // A short fade in the island's own color keeps the bar readable over content while
+      // the island is partly open; fully open, this strip is empty margin anyway.
+      style={{ height: HANDLE_H * scale, opacity, background: `linear-gradient(to top, ${color} 60%, transparent)` }}
+    >
+      <span
+        className="block h-[5px] w-11 rounded-full bg-white/30 transition-[width,background-color] duration-200 ease-out group-hover/handle:w-14 group-hover/handle:bg-white/60 group-data-[dragging]/island:w-16 group-data-[dragging]/island:bg-white/80"
+        style={{ zoom: scale }}
+      />
+    </motion.div>
   )
 }
 

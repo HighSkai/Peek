@@ -8,7 +8,8 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { api } from "@/lib/ipc"
-import type { Settings } from "@/lib/types"
+import { islandTransition, useMotion } from "@/lib/motion"
+import type { MotionLevel, Settings } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { prettyKey, ShortcutRecorder } from "./ShortcutRecorder"
 import { Group, Page, Row, SliderValue } from "./ui"
@@ -248,8 +249,32 @@ function ModeCard({ selected, onClick, notch, label }: { selected: boolean; onCl
 }
 
 export function AppearancePage({ s, set }: PageProps) {
+  const idle = [
+    { value: "eyes" as const, label: "Eyes" },
+    { value: "clock" as const, label: "Clock" },
+    ...(s.featureHardware ? [{ value: "stats" as const, label: "Stats" }] : []),
+    { value: "none" as const, label: "Off" },
+  ]
   return (
     <Page>
+      <Group title="Resting island">
+        <Row
+          label="Show"
+          description={
+            s.idleContent === "eyes"
+              ? "Peek's eyes blink and look around. Applies to the island and the notch."
+              : s.idleContent === "none"
+                ? "The island stays empty when nothing is playing."
+                : "Shown when nothing is playing. Applies to the island and the notch."
+          }
+        >
+          <Choice value={s.idleContent} onChange={(v) => set({ idleContent: v })} options={idle} />
+        </Row>
+        <Row label="24-hour clock" description="For the island and the clock on Home.">
+          <Switch checked={s.clock24h} onCheckedChange={(v) => set({ clock24h: v })} />
+        </Row>
+      </Group>
+
       <Group title="Style">
         <div className="flex gap-2 p-2">
           <ModeCard label="Dynamic Island" notch={false} selected={s.mode === "island"} onClick={() => set({ mode: "island" })} />
@@ -294,25 +319,6 @@ export function AppearancePage({ s, set }: PageProps) {
         </Row>
         <Row label="Dashboard">
           <Choice value={s.dashboardSize} onChange={(v) => set({ dashboardSize: v })} options={[...SIZES]} />
-        </Row>
-      </Group>
-
-      <Group title="At rest">
-        <Row label="Show in the island" description="When nothing else is going on.">
-          <Pick
-            className="w-36"
-            value={s.idleContent}
-            onChange={(v) => set({ idleContent: v })}
-            options={[
-              { value: "eyes", label: "Peek's eyes" },
-              { value: "clock", label: "Clock" },
-              { value: "stats", label: "Live system stats" },
-              { value: "none", label: "Nothing" },
-            ]}
-          />
-        </Row>
-        <Row label="24-hour clock">
-          <Switch checked={s.clock24h} onCheckedChange={(v) => set({ clock24h: v })} />
         </Row>
       </Group>
 
@@ -395,16 +401,12 @@ export function PositionPage({ s, set }: PageProps) {
 
 // ---------------------------------------------------------------------------
 
-function MotionPreview({ s }: { s: Settings }) {
+function MotionPreview({ s, level }: { s: Settings; level: MotionLevel }) {
   const [open, setOpen] = useState(false)
-  const speed = s.animationSpeed || 1
-  const transition = s.animations
-    ? {
-        type: "spring" as const,
-        visualDuration: (open ? 0.46 : 0.4) / speed,
-        bounce: open ? s.bounce : s.bounce * 0.6,
-      }
-    : { duration: 0 }
+  const transition = islandTransition(level, open ? "open" : "close", {
+    speed: s.animationSpeed || 1,
+    bounce: s.springBounce,
+  })
   return (
     <div className="flex h-28 flex-col items-center rounded-ctl bg-gradient-to-b from-neutral-700 to-neutral-900 p-2">
       <motion.button
@@ -422,17 +424,40 @@ function MotionPreview({ s }: { s: Settings }) {
   )
 }
 
+const LEVEL_NAME: Record<MotionLevel, string> = { full: "full", reduced: "reduced", off: "off" }
+
 export function MotionPage({ s, set }: PageProps) {
+  const { level } = useMotion()
   return (
     <Page>
       <Group footer="Drag the island down to open it and push it back up to close. A quick flick finishes the motion; a slow drag can be put back.">
         <div className="p-2">
-          <MotionPreview s={s} />
+          <MotionPreview s={s} level={level} />
         </div>
-        <Row label="Animations" description="Turn off for instant changes.">
-          <Switch checked={s.animations} onCheckedChange={(v) => set({ animations: v })} />
+        <Row
+          label="Animations"
+          description={
+            s.motion === "system"
+              ? `Follows Windows (Accessibility > Visual effects > Animation effects). Now ${LEVEL_NAME[level]}.`
+              : s.motion === "reduced"
+                ? "Fades instead of movement, with no bounce."
+                : s.motion === "off"
+                  ? "Everything changes instantly."
+                  : "Springs with a little bounce when the island opens."
+          }
+        >
+          <Choice
+            value={s.motion}
+            onChange={(v) => set({ motion: v })}
+            options={[
+              { value: "system", label: "System" },
+              { value: "full", label: "Full" },
+              { value: "reduced", label: "Reduced" },
+              { value: "off", label: "Off" },
+            ]}
+          />
         </Row>
-        {s.animations && (
+        {level === "full" && (
           <>
             <RangeRow
               label="Speed"
@@ -445,12 +470,13 @@ export function MotionPage({ s, set }: PageProps) {
             />
             <RangeRow
               label="Bounce"
-              value={s.bounce}
+              description="When the island opens. Closing never bounces."
+              value={s.springBounce}
               min={0}
-              max={0.6}
+              max={0.4}
               step={0.01}
               format={(v) => `${Math.round(v * 100)}%`}
-              onChange={(v) => set({ bounce: v })}
+              onChange={(v) => set({ springBounce: v })}
             />
             <Row label="Grow on hover" description="The island swells slightly under the pointer.">
               <Switch checked={s.hoverEffect} onCheckedChange={(v) => set({ hoverEffect: v })} />

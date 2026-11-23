@@ -11,9 +11,11 @@
 //   &prompt=...               send a question to the (fake) assistant
 //   &media=0                  nothing playing      &playing=0   paused
 //   &banner=1                 announce a new track shortly after loading
+//   &update=1                 pretend a newer release is available
+//   &motion=system|full|reduced|off
 
 import type { ChatRequest } from "./ipc"
-import type { ChatEvent, HardwareSnapshot, MediaState, Settings } from "./types"
+import type { ChatEvent, HardwareSnapshot, MediaState, Settings, UpdateEvent } from "./types"
 
 const params = new URLSearchParams(location.search)
 
@@ -58,9 +60,9 @@ let settings: Settings = {
   monitor: "",
   offsetX: 0,
   offsetY: 10,
-  animations: true,
+  motion: (params.get("motion") as Settings["motion"]) ?? "system",
   animationSpeed: 1,
-  bounce: 0.28,
+  springBounce: 0.15,
   hoverEffect: true,
   featureMedia: true,
   featureHardware: true,
@@ -88,6 +90,8 @@ let settings: Settings = {
   searxngUrl: "http://127.0.0.1:8888",
   groundingResults: 5,
   webResultsDefault: false,
+  updateCheck: true,
+  updateAutoInstall: false,
 }
 
 // ---------------------------------------------------------------------------
@@ -170,10 +174,13 @@ function snapshot(): HardwareSnapshot {
 }
 
 let latestHardware = snapshot()
-setInterval(() => {
-  latestHardware = snapshot()
-  emit("hardware://snapshot", latestHardware)
-}, 1000)
+// &static=1 freezes the stats, for screenshots.
+if (params.get("static") !== "1") {
+  setInterval(() => {
+    latestHardware = snapshot()
+    emit("hardware://snapshot", latestHardware)
+  }, 1000)
+}
 
 // ---------------------------------------------------------------------------
 // Media
@@ -299,6 +306,37 @@ const cancels = new Map<string, () => void>()
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // ---------------------------------------------------------------------------
+// Updates
+// ---------------------------------------------------------------------------
+
+const VERSION = "0.3.0"
+const NEWER = "0.3.1"
+const demoUpdate = params.get("update") === "1"
+
+function updateInfo() {
+  return {
+    current: VERSION,
+    latest: demoUpdate ? NEWER : VERSION,
+    url: "https://github.com/HighSkai/Peek/releases",
+    available: demoUpdate,
+    notes: demoUpdate
+      ? "### Fixes\n\n- The track banner no longer flickers when a playlist starts.\n- Live stats keep their place when a GPU sleeps.\n\n### Changes\n\n- Ask remembers the last provider you picked."
+      : "",
+    publishedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+    downloadSize: demoUpdate ? 2_240_000 : null,
+  }
+}
+
+export async function installUpdate(onEvent: (e: UpdateEvent) => void) {
+  const total = 2_240_000
+  for (let d = 0; d <= total; d += 160_000) {
+    onEvent({ type: "progress", downloaded: Math.min(d, total), total })
+    await sleep(120)
+  }
+  onEvent({ type: "installing" })
+}
+
+// ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
 
@@ -362,9 +400,10 @@ export async function invoke(cmd: string, args: Record<string, unknown> = {}): P
     case "list_monitors":
       return ["\\\\.\\DISPLAY1", "\\\\.\\DISPLAY2"]
     case "check_for_updates":
-      return { current: "0.2.0", latest: "0.2.0", url: "https://github.com/HighSkai/Peek/releases", available: false }
+      await sleep(600)
+      return updateInfo()
     case "system_info":
-      return { version: "0.2.0", mica: false, osBuild: 26100 }
+      return { version: VERSION, mica: false, osBuild: 26100 }
     case "open_url":
     case "open_web_search":
       window.open(

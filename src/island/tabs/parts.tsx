@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from "react"
 import { CornerDownLeftIcon, GlobeIcon, PauseIcon, PlayIcon, SearchIcon, SkipBackIcon, SkipForwardIcon } from "lucide-react"
 import { PeekMascot } from "@/components/peek-mascot"
 import { api } from "@/lib/ipc"
-import { duration } from "@/lib/format"
 import { useChat, useIslandUi } from "@/lib/store"
 import type { MediaState, Settings } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { useMediaPosition } from "../hooks"
-import { AmbientArt, Artwork, Kbd, Visualizer } from "../widgets"
+import { Kbd } from "../widgets"
 
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
   return <div className={cn("relative overflow-hidden rounded-card bg-white/[0.055]", className)}>{children}</div>
@@ -32,40 +30,14 @@ export function AppChip({ media }: { media: MediaState }) {
   )
 }
 
-export function Progress({ media, interactive = true }: { media: MediaState; interactive?: boolean }) {
-  const pos = useMediaPosition(media)
-  const pct = media.durationMs ? (pos / media.durationMs) * 100 : 0
-  const ref = useRef<HTMLDivElement>(null)
-  if (!media.durationMs) return <div className="h-4" />
-  return (
-    <div className="flex items-center gap-2 font-small text-[10.5px] text-white/50">
-      <span className="tabular w-8 text-right">{duration(pos)}</span>
-      <div
-        ref={ref}
-        className={cn("group relative h-3.5 flex-1", interactive && media.canSeek && "cursor-pointer")}
-        onClick={(e) => {
-          if (!interactive || !media.canSeek || !ref.current) return
-          const r = ref.current.getBoundingClientRect()
-          const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
-          api.mediaCommand("seek", Math.round(f * media.durationMs))
-        }}
-      >
-        <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/15 transition-[height] group-hover:h-1.5">
-          <div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-      <span className="tabular w-8">-{duration(media.durationMs - pos)}</span>
-    </div>
-  )
-}
-
 export function Transport({ media, size = "md" }: { media: MediaState; size?: "md" | "lg" }) {
   const big = size === "lg"
-  const btn = "grid place-items-center rounded-full text-white transition-[background-color,transform] active:scale-90 disabled:opacity-30"
+  const btn =
+    "grid place-items-center rounded-full text-white transition-[background-color,transform] active:scale-90 disabled:opacity-30"
   return (
-    <div className={cn("flex items-center justify-center", big ? "gap-4" : "gap-2.5")}>
+    <div className={cn("flex items-center justify-center", big ? "gap-4" : "gap-1")}>
       <button
-        className={cn(btn, big ? "size-9" : "size-7", "hover:bg-white/10")}
+        className={cn(btn, big ? "size-9" : "size-8", "hover:bg-white/10")}
         disabled={!media.canPrevious}
         onClick={() => api.mediaCommand("previous")}
         aria-label="Previous"
@@ -85,7 +57,7 @@ export function Transport({ media, size = "md" }: { media: MediaState; size?: "m
         )}
       </button>
       <button
-        className={cn(btn, big ? "size-9" : "size-7", "hover:bg-white/10")}
+        className={cn(btn, big ? "size-9" : "size-8", "hover:bg-white/10")}
         disabled={!media.canNext}
         onClick={() => api.mediaCommand("next")}
         aria-label="Next"
@@ -109,39 +81,6 @@ export function NothingPlaying({ compact = false }: { compact?: boolean }) {
       </div>
       <PeekMascot className={compact ? "h-[78px] w-[122px]" : "h-[100px] w-[158px]"} />
     </div>
-  )
-}
-
-export function NowPlayingCard({ media, settings }: { media: MediaState | null; settings: Settings }) {
-  if (!media?.available) {
-    return (
-      <Card className="h-full">
-        <NothingPlaying compact />
-      </Card>
-    )
-  }
-  return (
-    <Card className="h-full">
-      <AmbientArt src={media.artwork} opacity={0.5} />
-      <div className="relative flex h-full flex-col justify-between gap-1.5 p-3">
-        <div className="flex min-h-0 gap-3">
-          <Artwork src={media.artwork} className="size-[112px]" rounded="rounded-[10px]" />
-          <div className="flex min-w-0 flex-1 flex-col pt-0.5">
-            <div className="flex items-center justify-between gap-2">
-              <AppChip media={media} />
-              <Visualizer playing={media.playing} mode={settings.visualizer} height={12} barWidth={2.5} />
-            </div>
-            <div className="mt-1.5 line-clamp-2 text-[14.5px] font-semibold leading-snug">{media.title || "Unknown title"}</div>
-            <div className="truncate text-[12.5px] text-white/65">{media.artist}</div>
-            {media.album && <div className="truncate text-[11.5px] text-white/40">{media.album}</div>}
-          </div>
-        </div>
-        <div className="space-y-1">
-          <Progress media={media} />
-          <Transport media={media} />
-        </div>
-      </div>
-    </Card>
   )
 }
 

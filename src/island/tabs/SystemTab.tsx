@@ -13,6 +13,7 @@ import {
   NetworkIcon,
   ThermometerIcon,
 } from "lucide-react"
+import { Percent } from "@/components/animated-number"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { api } from "@/lib/ipc"
 import { bytes, ghz, NONE, pct, rate, temp, uptime } from "@/lib/format"
@@ -51,7 +52,7 @@ export function SystemTab({ settings }: { settings: Settings }) {
                 {snap.cpu.name || "CPU"}
               </div>
             </div>
-            <div className="tabular font-display text-[24px] font-semibold leading-none">{pct(snap.cpu.usage)}</div>
+            <Percent value={snap.cpu.usage} className="tabular font-display text-[24px] font-semibold leading-none" />
           </div>
           <Sparkline values={history.cpu} max={100} className="mt-1.5 h-8" />
           <div className="mt-1.5 flex h-6 items-end gap-[3px]" aria-label="Per-thread usage">
@@ -86,7 +87,7 @@ export function SystemTab({ settings }: { settings: Settings }) {
           <div className="mt-2 flex items-center gap-2.5">
             <Ring value={ramPct} size={38} stroke={3.5} />
             <div>
-              <div className="tabular font-display text-[17px] font-semibold leading-tight">{pct(ramPct)}</div>
+              <Percent value={ramPct} className="tabular block font-display text-[17px] font-semibold leading-tight" />
               <div className="tabular font-small text-[11px] text-white/50">
                 {bytes(snap.memory.used)} of {bytes(snap.memory.total)}
               </div>
@@ -215,7 +216,7 @@ function GpuCard({ gpu, history, unit, wide }: { gpu: GpuInfo; history?: number[
             {gpu.name}
           </div>
         </div>
-        <div className="tabular font-display text-[24px] font-semibold leading-none">{gpu.usage != null ? pct(gpu.usage) : NONE}</div>
+        <Percent value={gpu.usage} className="tabular font-display text-[24px] font-semibold leading-none" />
       </div>
       {history && <Sparkline values={history} max={100} className="mt-1.5 h-8" />}
       {vram != null && (

@@ -194,9 +194,12 @@ pub struct Settings {
     pub offset_y: i32,
 
     // Animations
-    pub animations: bool,
+    /// "system" (follow Windows' animation effects setting) | "full" | "reduced" | "off"
+    pub motion: String,
     pub animation_speed: f32,
-    pub bounce: f32,
+    /// Spring bounce when the island opens (0 = no overshoot). Renamed from `bounce`
+    /// in 0.3.0 so the old, bouncier default resets.
+    pub spring_bounce: f32,
     pub hover_effect: bool,
 
     // Features
@@ -222,6 +225,12 @@ pub struct Settings {
     pub searxng_url: String,
     pub grounding_results: u32,
     pub web_results_default: bool,
+
+    // Updates
+    /// Check GitHub for a newer release at startup and every few hours.
+    pub update_check: bool,
+    /// Download and install updates without asking (Peek restarts when the island is closed).
+    pub update_auto_install: bool,
 }
 
 impl Default for Settings {
@@ -253,9 +262,9 @@ impl Default for Settings {
             offset_x: 0,
             offset_y: 10,
 
-            animations: true,
+            motion: "system".into(),
             animation_speed: 1.0,
-            bounce: 0.28,
+            spring_bounce: 0.15,
             hover_effect: true,
 
             feature_media: true,
@@ -278,6 +287,9 @@ desktop. Answer clearly and briefly. Use Markdown only when it helps."
             searxng_url: "http://127.0.0.1:8888".into(),
             grounding_results: 5,
             web_results_default: false,
+
+            update_check: true,
+            update_auto_install: false,
         }
     }
 }
@@ -287,7 +299,10 @@ impl Settings {
     fn sanitize(&mut self) {
         self.glass_opacity = self.glass_opacity.clamp(0.35, 1.0);
         self.animation_speed = self.animation_speed.clamp(0.4, 2.5);
-        self.bounce = self.bounce.clamp(0.0, 0.6);
+        self.spring_bounce = self.spring_bounce.clamp(0.0, 0.5);
+        if !["system", "full", "reduced", "off"].contains(&self.motion.as_str()) {
+            self.motion = "system".into();
+        }
         self.hover_delay_ms = self.hover_delay_ms.clamp(0, 2000);
         self.hardware_interval_ms = self.hardware_interval_ms.clamp(500, 10_000);
         self.offset_x = self.offset_x.clamp(-2000, 2000);

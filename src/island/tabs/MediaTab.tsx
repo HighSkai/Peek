@@ -21,17 +21,19 @@ export function MediaTab({ settings }: { settings: Settings }) {
   return (
     <div className="relative h-full overflow-hidden rounded-card">
       <AmbientArt src={media.artwork} opacity={0.55} />
-      <div className="relative flex h-full items-center gap-5 px-5">
-        <Artwork src={media.artwork} className="aspect-square h-[min(80%,196px)]" rounded="rounded-card" />
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
+      <div className="relative flex h-full items-center gap-4 px-4">
+        <Artwork src={media.artwork} className="aspect-square h-[min(86%,180px)]" rounded="rounded-card" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
           <div className="min-w-0">
-            <div className="mb-1.5 flex items-center gap-2">
+            <div className="mb-1 flex items-center gap-2">
               <AppChip media={media} />
               <Visualizer playing={media.playing} mode={settings.visualizer} height={12} barWidth={2.5} />
             </div>
-            <div className="line-clamp-2 text-[18px] font-semibold leading-tight">{media.title || "Unknown title"}</div>
-            <div className="mt-0.5 truncate text-[13px] text-white/65">{media.artist}</div>
-            {media.album && <div className="truncate text-[12px] text-white/40">{media.album}</div>}
+            <div className="truncate text-[17px] font-semibold leading-tight">{media.title || "Unknown title"}</div>
+            <div className="mt-0.5 truncate text-[12.5px] text-white/60">
+              {media.artist}
+              {media.album && <span className="text-white/40"> · {media.album}</span>}
+            </div>
           </div>
 
           {media.durationMs > 0 && (

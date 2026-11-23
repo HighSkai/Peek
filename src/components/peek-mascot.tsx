@@ -153,9 +153,9 @@ export function PeekMascot({ className }: { className?: string }) {
         ref={ref}
         viewBox="96 140 320 230"
         className="relative h-full w-full"
-        initial={reduce ? false : { y: 40, opacity: 0 }}
+        initial={reduce ? false : { y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ type: "spring", bounce: 0.35, visualDuration: 0.5, delay: 0.1 }}
+        transition={{ type: "spring", bounce: 0.15, visualDuration: 0.5, delay: 0.1 }}
         aria-hidden="true"
       >
         <path
@@ -195,20 +195,22 @@ const PUPIL_R = 2.55
 export function PeekEyes({
   size = 14,
   animate = true,
+  wander = animate,
   look,
   className,
 }: {
   /** Height in pixels. */
   size?: number
+  /** Blink. */
   animate?: boolean
+  /** Glance around and follow `look`; off at the reduced animation level. */
+  wander?: boolean
   look?: Look | null
   className?: string
 }) {
-  const reduce = useReducedMotion()
-  const live = animate && !reduce
-  const closed = useBlink(live)
-  const glance = useGlance(live && !look)
-  const target = look ?? glance
+  const closed = useBlink(animate)
+  const glance = useGlance(wander && !look)
+  const target = wander ? (look ?? glance) : REST
   const px = Math.max(-1, Math.min(1, target.x)) * (EYE_RX - PUPIL_R - 0.55)
   const py = Math.max(-1, Math.min(1, target.y)) * (EYE_RY - PUPIL_R - 0.9)
 
@@ -233,7 +235,7 @@ export function PeekEyes({
             fill="#0a0a0a"
             initial={false}
             animate={{ cx: cx + px, cy: 7 + py }}
-            transition={{ type: "spring", stiffness: 420, damping: 28, mass: 0.6 }}
+            transition={wander ? { type: "spring", stiffness: 420, damping: 30, mass: 0.6 } : { duration: 0 }}
           />
         </motion.g>
       ))}

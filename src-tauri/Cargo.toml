@@ -1,6 +1,6 @@
 [package]
 name = "peek"
-version = "0.2.0"
+version = "0.3.0"
 description = "A Dynamic Island for Windows 11"
 authors = ["Peek contributors"]
 license = "MIT"
@@ -31,6 +31,7 @@ futures-util = "0.3"
 sysinfo = { version = "0.40", default-features = false, features = ["system", "disk", "network", "component"] }
 base64 = "0.22"
 urlencoding = "2"
+sha2 = "0.10"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }

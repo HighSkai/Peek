@@ -6,6 +6,9 @@ export type SizePreset = "small" | "medium" | "large"
 export type Density = "regular" | "compact"
 /** "always": the island rests at the top of the screen. "hotkey": it only appears when opened. */
 export type Reveal = "always" | "hotkey"
+export type MotionPreference = "system" | "full" | "reduced" | "off"
+/** The animation level actually in use, after "system" is resolved. */
+export type MotionLevel = "full" | "reduced" | "off"
 export type ProviderKind = "ollama" | "openai" | "anthropic" | "gemini"
 export type Tab = "home" | "system" | "media" | "ask" | "settings"
 
@@ -47,9 +50,10 @@ export interface Settings {
   offsetX: number
   offsetY: number
 
-  animations: boolean
+  /** "system" follows Windows' animation effects setting. */
+  motion: MotionPreference
   animationSpeed: number
-  bounce: number
+  springBounce: number
   hoverEffect: boolean
 
   featureMedia: boolean
@@ -70,6 +74,9 @@ export interface Settings {
   searxngUrl: string
   groundingResults: number
   webResultsDefault: boolean
+
+  updateCheck: boolean
+  updateAutoInstall: boolean
 }
 
 export interface CpuInfo {
@@ -195,7 +202,8 @@ export interface ChatMessage {
 
 export interface IslandCommand {
   action: "toggle" | "expand" | "collapse"
-  tab: Tab | null
+  /** A section, or "settings:<page>" for a settings page. */
+  tab: string | null
   focusSearch: boolean
 }
 
@@ -204,7 +212,16 @@ export interface UpdateInfo {
   latest: string
   url: string
   available: boolean
+  /** Release notes (Markdown) of the latest release. */
+  notes: string
+  publishedAt: string | null
+  /** Size of the Windows installer in bytes, when the release has one. */
+  downloadSize: number | null
 }
+
+export type UpdateEvent =
+  | { type: "progress"; downloaded: number; total: number }
+  | { type: "installing" }
 
 export interface SystemInfo {
   version: string

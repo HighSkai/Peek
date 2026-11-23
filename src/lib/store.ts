@@ -1,14 +1,22 @@
 import { create } from "zustand"
 import { api, EVENTS, on } from "./ipc"
 import { localTimeString } from "./format"
-import type { AudioLevel, HardwareSnapshot, MediaState, Settings, Source, Tab } from "./types"
+import type { AudioLevel, HardwareSnapshot, MediaState, Settings, Source, Tab, UpdateInfo } from "./types"
 
 // ---------------------------------------------------------------------------
 // Island UI: the open tab and the settings page, shared so any part of the
 // dashboard can jump to a section.
 // ---------------------------------------------------------------------------
 
-export type SettingsPage = "general" | "appearance" | "position" | "motion" | "features" | "ai" | "about"
+export type SettingsPage =
+  | "general"
+  | "appearance"
+  | "position"
+  | "motion"
+  | "features"
+  | "ai"
+  | "updates"
+  | "about"
 
 interface IslandUi {
   tab: Tab
@@ -70,6 +78,57 @@ export function startSettingsSync() {
   api.getSettings().then((settings) => useSettings.setState({ settings }))
   on(EVENTS.settings, (settings) => useSettings.setState({ settings }))
 }
+
+// ---------------------------------------------------------------------------
+// Updates
+// ---------------------------------------------------------------------------
+
+export type UpdatePhase = "idle" | "checking" | "downloading" | "installing" | "error"
+
+interface UpdatesStore {
+  info: UpdateInfo | null
+  phase: UpdatePhase
+  checkedAt: number | null
+  error: string | null
+  downloaded: number
+  total: number
+  check: () => Promise<UpdateInfo | null>
+  install: () => Promise<void>
+}
+
+export const useUpdates = create<UpdatesStore>((set, get) => ({
+  info: null,
+  phase: "idle",
+  checkedAt: null,
+  error: null,
+  downloaded: 0,
+  total: 0,
+  check: async () => {
+    const phase = get().phase
+    if (phase === "checking" || phase === "downloading" || phase === "installing") return get().info
+    set({ phase: "checking", error: null })
+    try {
+      const info = await api.checkForUpdates()
+      set({ info, phase: "idle", checkedAt: Date.now() })
+      return info
+    } catch (e) {
+      set({ phase: "idle", error: String(e), checkedAt: Date.now() })
+      return null
+    }
+  },
+  install: async () => {
+    if (get().phase === "downloading" || get().phase === "installing") return
+    set({ phase: "downloading", error: null, downloaded: 0, total: get().info?.downloadSize ?? 0 })
+    try {
+      await api.installUpdate((ev) => {
+        if (ev.type === "progress") set({ downloaded: ev.downloaded, total: ev.total })
+        else set({ phase: "installing" })
+      })
+    } catch (e) {
+      set({ phase: "error", error: String(e) })
+    }
+  },
+}))
 
 // ---------------------------------------------------------------------------
 // Hardware

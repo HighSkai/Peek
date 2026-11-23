@@ -24,12 +24,13 @@ pub const LABEL: &str = "island";
 pub const HOVER_EVENT: &str = "island://hover";
 pub const COMMAND_EVENT: &str = "island://command";
 
-/// Logical size of the expanded dashboard. Mirrored in `src/lib/layout.ts`.
+/// Logical size of the open island at its tallest (the settings section). Each section
+/// only takes the height it needs; see `dashboardSize` in `src/lib/layout.ts`.
 pub fn dashboard_size(preset: SizePreset, density: Density) -> (f64, f64) {
     let (w, h) = match preset {
-        SizePreset::Small => (540.0, 320.0),
-        SizePreset::Medium => (600.0, 356.0),
-        SizePreset::Large => (680.0, 404.0),
+        SizePreset::Small => (540.0, 372.0),
+        SizePreset::Medium => (600.0, 404.0),
+        SizePreset::Large => (680.0, 452.0),
     };
     let scale = match density {
         Density::Regular => 1.0,

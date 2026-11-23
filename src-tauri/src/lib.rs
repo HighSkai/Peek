@@ -21,9 +21,10 @@ use tauri_plugin_opener::OpenerExt;
 
 pub fn run() {
     tauri::Builder::default()
-        // Must be registered first: a second launch opens settings in the running instance.
+        // Must be registered first: a second launch opens settings in the running instance
+        // (except launches from autostart or the updater restarting Peek).
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            if !args.iter().any(|a| a == "--autostart") {
+            if !args.iter().any(|a| a == "--autostart" || a == "--updated") {
                 open_settings_panel(app);
             }
         }))
@@ -109,6 +110,7 @@ pub fn run() {
             secrets::secret_set,
             secrets::secret_exists,
             updates::check_for_updates,
+            updates::install_update,
             open_settings,
             open_url,
             quit_app,

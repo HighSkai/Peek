@@ -162,6 +162,9 @@ pub struct Settings {
     pub launch_at_login: bool,
     pub show_on_startup: bool,
     pub hide_in_fullscreen: bool,
+    /// Slide the island up out of the way while an app window sits under it (a
+    /// maximized browser's tabs, say). Resting the pointer on the top edge brings it back.
+    pub tuck_away: bool,
     pub collapse_on_blur: bool,
     pub expand_on_hover: bool,
     pub hover_delay_ms: u32,
@@ -239,6 +242,7 @@ impl Default for Settings {
             launch_at_login: false,
             show_on_startup: true,
             hide_in_fullscreen: true,
+            tuck_away: true,
             collapse_on_blur: true,
             expand_on_hover: false,
             hover_delay_ms: 350,

@@ -32,6 +32,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 export const EVENTS = {
   settings: "settings://changed",
   hover: "island://hover",
+  tucked: "island://tucked",
   command: "island://command",
   hardware: "hardware://snapshot",
   media: "media://state",
@@ -41,6 +42,7 @@ export const EVENTS = {
 type EventPayloads = {
   [EVENTS.settings]: Settings
   [EVENTS.hover]: boolean
+  [EVENTS.tucked]: boolean
   [EVENTS.command]: IslandCommand
   [EVENTS.hardware]: HardwareSnapshot
   [EVENTS.media]: MediaState

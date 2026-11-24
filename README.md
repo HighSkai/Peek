@@ -15,7 +15,7 @@ live hardware stats and an AI search bar, then push it back up.
 [![License: MIT](https://img.shields.io/badge/license-MIT-111111?style=flat-square&labelColor=3f3f3f)](LICENSE)
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-111111?style=flat-square&labelColor=3f3f3f)](#requirements)
 
-[**Download**](https://github.com/HighSkai/Peek/releases/latest) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [What's new](#whats-new-in-030) &nbsp;·&nbsp; [Getting started](#getting-started) &nbsp;·&nbsp; [AI setup](#ai-setup) &nbsp;·&nbsp; [Build from source](#building-from-source)
+[**Download**](https://github.com/HighSkai/Peek/releases/latest) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [What's new](#whats-new-in-031) &nbsp;·&nbsp; [Getting started](#getting-started) &nbsp;·&nbsp; [AI setup](#ai-setup) &nbsp;·&nbsp; [Build from source](#building-from-source)
 
 <br />
 
@@ -23,15 +23,12 @@ live hardware stats and an AI search bar, then push it back up.
 
 </div>
 
-## What's new in 0.3.0
+## What's new in 0.3.1
 
-- Peek updates itself. It checks GitHub, shows the release notes and installs new versions in place, with no installer to download. Automatic installs are optional. See [Updates](#updates).
-- A new layout: the island only takes the height each section needs, and Home is three short rows (now playing next to the clock, live stats, search) instead of a large music card.
-- Tabs show their names, and the close handle is the full width of the island.
-- Animations follow Windows by default, with Full, Reduced and Off to choose from. Springs are calmer, and numbers roll smoothly between values.
-- Peek's eyes can be turned off in one click.
+- The island gets out of the way. When a window sits under it, like a maximized browser with its tabs along the top, it slides up above the screen and every click goes to the window. Rest the pointer on the top edge to bring it back. See [Out of the way](#out-of-the-way).
+- It's on by default; *Move aside for windows* in Settings → General turns it off.
 
-0.2.0 made everything smaller, added compact density, hotkey mode, settings inside the island, drag-to-open and drag-to-close, real eyes and the Windows 11 fonts. See the [changelog](CHANGELOG.md) for both releases.
+0.3.0 added updates from inside Peek, the shorter layout that only takes the height each section needs, named tabs, a full-width close handle and the animation levels. 0.2.0 made everything smaller and added compact density, hotkey mode, settings inside the island and drag-to-open. See the [changelog](CHANGELOG.md) for every release.
 
 ## Features
 
@@ -44,6 +41,14 @@ Two looks: *Dynamic Island* floats as a pill just below the top edge, and *Notch
 </div>
 
 Everything outside the island is click-through. It hides during fullscreen games and videos, and it gives focus back to the app you were using when it closes.
+
+### Out of the way
+
+A maximized window reaches the top of the screen, so its tabs or title bar sit right under the island. When Peek sees a window there, the island slides up above the screen and lets every click through. Rest the pointer on the top edge in front of it for a moment and it comes back; move away and it tucks again. A quick move up to a tab and a click never brings it out, and neither does dragging a tab or a window along the top. The shortcut and the tray icon open it as usual. Turn it off with *Move aside for windows* in Settings → General.
+
+<div align="center">
+<img src="docs/assets/screenshots/tuck.png" alt="Three frames over a maximized browser: the island resting on top of the tab strip, the island gone and the pointer on the tab that was under it, and the pointer on the top edge with the island back" width="100%" />
+</div>
 
 ### Drag it open, push it closed
 
@@ -76,7 +81,7 @@ Settings → Motion → *Animations* has four levels. *System* (the default) fol
 Settings → Updates shows whether a newer version is out, with its release notes. **Install and restart** downloads the installer from this repository's latest release, checks its size and SHA-256 against what GitHub publishes for it, runs it silently and starts Peek again. Peek checks when it starts and every 6 hours (you can turn that off), and *Install updates automatically* does the whole thing while the island is closed. *Check for updates…* is also in the tray menu, and the settings gear shows a dot when an update is ready.
 
 <div align="center">
-<img src="docs/assets/screenshots/updates.png" alt="The Updates page inside the island: Peek 0.3.1 is available with an Install and restart button, the last check time, and switches to check and install automatically" width="70%" />
+<img src="docs/assets/screenshots/updates.png" alt="The Updates page inside the island: Peek 0.3.2 is available with an Install and restart button, the last check time, and switches to check and install automatically" width="70%" />
 </div>
 
 ### Now playing
@@ -114,7 +119,7 @@ Ask a question and the answer streams in, formatted with Markdown. Press <kbd>Ct
 
 ### Settings, inside the island
 
-The gear in the dashboard opens settings in place, laid out like the Windows 11 Settings app. It covers the resting island (eyes, clock, stats or off), appearance, density and size, position and monitor, animations, startup, hotkey mode and the shortcut, every feature toggle, AI providers and updates. Turn off anything you don't use and it stops running in the background. *Settings…* in the tray menu opens the same page.
+The gear in the dashboard opens settings in place, laid out like the Windows 11 Settings app. It covers the resting island (eyes, clock, stats or off), appearance, density and size, position and monitor, animations, startup, hotkey mode and the shortcut, moving aside for windows, every feature toggle, AI providers and updates. Turn off anything you don't use and it stops running in the background. *Settings…* in the tray menu opens the same page.
 
 <table>
   <tr>
@@ -152,6 +157,7 @@ Peek appears at the top of your screen and adds an icon to the system tray. Righ
 | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> (changeable) | Open or close the dashboard with the search bar focused |
 | Push the header or the bottom handle up, or tap the handle | Close the dashboard |
 | <kbd>Esc</kbd> or click elsewhere | Close the dashboard |
+| Rest the pointer on the top edge | Bring the island back when it has moved aside for a window |
 | <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>4</kbd> | Switch between Home, Music, System and Ask |
 | <kbd>Enter</kbd> in the search bar | Ask the AI (or search the web, if you swap them in settings) |
 | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Do the other one |
@@ -223,7 +229,7 @@ Peek/
 │  └─ lib/                  IPC, stores, layout sizes, types, demo backend
 ├─ src-tauri/               Rust backend (Tauri 2)
 │  └─ src/
-│     ├─ island.rs          placement, click-through, fullscreen detection, focus
+│     ├─ island.rs          placement, click-through, fullscreen, tuck-away, focus
 │     ├─ media.rs           Windows media session (GSMTC) integration
 │     ├─ audio.rs           output level meter and master volume
 │     ├─ hardware/          sysinfo, GPU counters, NVML, LibreHardwareMonitor

@@ -1,10 +1,15 @@
 //! The island window: placement at the top of the screen, click-through outside of the
-//! visible island, fullscreen auto-hide and focus handling.
+//! visible island, fullscreen auto-hide, tucking away over app windows and focus handling.
 //!
 //! The window is a fixed-size transparent overlay that is large enough to hold the
 //! expanded dashboard. The webview reports the rectangle of the island as it animates and
 //! a lightweight thread toggles click-through so that only the island itself captures
 //! the mouse. This keeps the animations entirely in CSS, with no window resizing.
+//!
+//! Tucking away: while an app window sits under the resting island (a maximized
+//! browser's tab strip, say), the island slides up out of sight and lets every click
+//! through. Resting the pointer on the top edge in front of it brings it back until the
+//! pointer leaves again. The webview only animates; the state lives here.
 
 use std::{
     sync::{
@@ -12,7 +17,7 @@ use std::{
         Mutex,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use serde::Serialize;
@@ -22,7 +27,19 @@ use crate::settings::{Density, IslandMode, Settings, SettingsStore, SizePreset};
 
 pub const LABEL: &str = "island";
 pub const HOVER_EVENT: &str = "island://hover";
+pub const TUCK_EVENT: &str = "island://tucked";
 pub const COMMAND_EVENT: &str = "island://command";
+
+/// How long the pointer has to rest on the top edge before a tucked island comes back.
+/// Long enough that heading for a browser tab under it and clicking never triggers it.
+const REVEAL_DWELL: Duration = Duration::from_millis(350);
+/// How long a revealed island waits after the pointer leaves before tucking away again.
+const RETUCK_DELAY: Duration = Duration::from_millis(700);
+/// Half the width (logical px) of the stretch of top edge that brings the island back.
+const REVEAL_HALF_WIDTH: f64 = 110.0;
+/// Horizontal offsets (logical px) from the island's center that are checked for an app
+/// window under the resting island. The smallest resting island is 128 px wide.
+const PROBE_XS: [f64; 3] = [-56.0, 0.0, 56.0];
 
 /// Logical size of the open island at its tallest (the settings section). Each section
 /// only takes the height it needs; see `dashboardSize` in `src/lib/layout.ts`.
@@ -58,14 +75,20 @@ pub struct IslandState {
     hit: Mutex<Option<Rect>>,
     /// Bumped whenever the hit rect changes so the hover thread re-evaluates.
     hit_version: AtomicU64,
-    /// Physical window position and scale, cached so the hover thread never has to
-    /// round-trip through the event loop.
-    geometry: Mutex<(i32, i32, f64)>,
+    /// Physical window position, scale and width, cached so the background threads never
+    /// have to round-trip through the event loop.
+    geometry: Mutex<(i32, i32, f64, i32)>,
     hovered: AtomicBool,
     ignoring: AtomicBool,
     expanded: AtomicBool,
     user_hidden: AtomicBool,
     fullscreen_hidden: AtomicBool,
+    /// An app window sits under the resting island and the setting is on.
+    tuck_wanted: AtomicBool,
+    /// The pointer brought a tucked island back (see `hover_loop`).
+    peeked: AtomicBool,
+    /// What the webview was last told; see `sync_tuck`.
+    tucked: AtomicBool,
     ready: AtomicBool,
     /// HWND that had focus before Peek took it, restored when the dashboard collapses.
     previous_foreground: AtomicIsize,
@@ -144,14 +167,33 @@ pub fn layout(app: &AppHandle) {
     let _ = win.set_size(PhysicalSize::new(pw as u32, ph as u32));
     let _ = win.set_position(PhysicalPosition::new(x, y));
 
-    *app.state::<IslandState>().geometry.lock().unwrap() = (x, y, scale);
+    *app.state::<IslandState>().geometry.lock().unwrap() = (x, y, scale, pw as i32);
 }
 
 /// Refresh the cached position/scale after the OS moved or rescaled the window.
 pub fn refresh_geometry(app: &AppHandle) {
     if let Some(win) = window(app) {
-        if let (Ok(pos), Ok(scale)) = (win.outer_position(), win.scale_factor()) {
-            *app.state::<IslandState>().geometry.lock().unwrap() = (pos.x, pos.y, scale);
+        if let (Ok(pos), Ok(scale), Ok(size)) =
+            (win.outer_position(), win.scale_factor(), win.outer_size())
+        {
+            *app.state::<IslandState>().geometry.lock().unwrap() =
+                (pos.x, pos.y, scale, size.width as i32);
+        }
+    }
+}
+
+/// Work out whether the island should be tucked away and tell the webview when that
+/// changes. Opening the dashboard always wins, and so does a pointer that brought it back.
+fn sync_tuck(app: &AppHandle) {
+    let state = app.state::<IslandState>();
+    let tucked = state.tuck_wanted.load(Ordering::SeqCst)
+        && !state.peeked.load(Ordering::SeqCst)
+        && !state.expanded.load(Ordering::SeqCst);
+    if state.tucked.swap(tucked, Ordering::SeqCst) != tucked {
+        // The hover thread re-checks click-through right away.
+        state.hit_version.fetch_add(1, Ordering::SeqCst);
+        if let Some(win) = window(app) {
+            let _ = win.emit(TUCK_EVENT, tucked);
         }
     }
 }
@@ -204,7 +246,7 @@ pub fn start(app: &AppHandle) {
         .spawn(move || hover_loop(handle))
         .ok();
 
-    // Fullscreen watcher and monitor-change watcher.
+    // Fullscreen, tuck-away and monitor-change watcher.
     let handle = app.clone();
     thread::Builder::new()
         .name("peek-watch".into())
@@ -215,6 +257,9 @@ pub fn start(app: &AppHandle) {
 fn hover_loop(app: AppHandle) {
     let mut last_cursor = (i32::MIN, i32::MIN);
     let mut last_version = u64::MAX;
+    // Tuck-away timers: pointer resting on the top edge, and pointer gone from the island.
+    let mut dwell_since: Option<Instant> = None;
+    let mut away_since: Option<Instant> = None;
     loop {
         let state = app.state::<IslandState>();
         if state.quitting.load(Ordering::SeqCst) {
@@ -240,15 +285,17 @@ fn hover_loop(app: AppHandle) {
             {
                 last_cursor = cursor;
                 last_version = version;
-                let (wx, wy, scale) = *state.geometry.lock().unwrap();
+                let (wx, wy, scale, _) = *state.geometry.lock().unwrap();
                 let lx = (cursor.0 - wx) as f64 / scale;
                 let ly = (cursor.1 - wy) as f64 / scale;
-                let inside = state
-                    .hit
-                    .lock()
-                    .unwrap()
-                    .map(|r| lx >= r.x && lx <= r.x + r.w && ly >= r.y && ly <= r.y + r.h)
-                    .unwrap_or(false);
+                // A tucked island lets everything through, even while it's sliding away.
+                let inside = !state.tucked.load(Ordering::SeqCst)
+                    && state
+                        .hit
+                        .lock()
+                        .unwrap()
+                        .map(|r| lx >= r.x && lx <= r.x + r.w && ly >= r.y && ly <= r.y + r.h)
+                        .unwrap_or(false);
 
                 if state.ignoring.load(Ordering::SeqCst) == inside {
                     if let Some(win) = window(&app) {
@@ -262,6 +309,49 @@ fn hover_loop(app: AppHandle) {
                         let _ = win.emit(HOVER_EVENT, inside);
                     }
                 }
+            }
+
+            // Tuck-away: the pointer resting on the top edge in front of the tucked island
+            // brings it back. Once the pointer has left it (and the dashboard is closed)
+            // it tucks away again.
+            if state.tuck_wanted.load(Ordering::SeqCst) {
+                let (wx, wy, scale, ww) = *state.geometry.lock().unwrap();
+                let at_edge = cursor.1 >= wy
+                    && cursor.1 <= wy + 1
+                    && ((cursor.0 - (wx + ww / 2)).abs() as f64) <= REVEAL_HALF_WIDTH * scale;
+                if state.tucked.load(Ordering::SeqCst) {
+                    away_since = None;
+                    // Not while a button is held: dragging a tab or a window up there
+                    // shouldn't bring the island out under it.
+                    if at_edge && !platform::mouse_button_down() {
+                        let since = *dwell_since.get_or_insert_with(Instant::now);
+                        if since.elapsed() >= REVEAL_DWELL {
+                            dwell_since = None;
+                            state.peeked.store(true, Ordering::SeqCst);
+                            sync_tuck(&app);
+                        }
+                    } else {
+                        dwell_since = None;
+                    }
+                } else if state.peeked.load(Ordering::SeqCst) {
+                    dwell_since = None;
+                    // In island mode the pointer on the edge sits just above the island,
+                    // so the edge counts as being on it.
+                    let near = at_edge
+                        || state.hovered.load(Ordering::SeqCst)
+                        || state.expanded.load(Ordering::SeqCst);
+                    if near {
+                        away_since = None;
+                    } else if away_since.get_or_insert_with(Instant::now).elapsed() >= RETUCK_DELAY
+                    {
+                        away_since = None;
+                        state.peeked.store(false, Ordering::SeqCst);
+                        sync_tuck(&app);
+                    }
+                }
+            } else {
+                dwell_since = None;
+                away_since = None;
             }
         }
 
@@ -292,8 +382,25 @@ fn watch_loop(app: AppHandle) {
             let _ = app.run_on_main_thread(move || update_visibility(&handle));
         }
 
+        // Tuck away while an app window sits under the resting island. Checked every
+        // tick so a maximized window doesn't wait long for its tabs to be clickable.
+        let wanted = if settings.tuck_away && settings.reveal == "always" {
+            window(&app).and_then(|w| platform::app_under(&w, &probe_points(&state, &settings)))
+        } else {
+            Some(false)
+        };
+        // `None`: the island itself was in the way of every probe; keep the last answer.
+        if let Some(wanted) = wanted {
+            if state.tuck_wanted.swap(wanted, Ordering::SeqCst) != wanted {
+                if !wanted {
+                    state.peeked.store(false, Ordering::SeqCst);
+                }
+                sync_tuck(&app);
+            }
+        }
+
         // Re-layout when displays are added, removed, moved or rescaled.
-        if tick % 4 == 0 {
+        if tick % 12 == 0 {
             if let Some(win) = window(&app) {
                 let sig = win
                     .available_monitors()
@@ -320,8 +427,29 @@ fn watch_loop(app: AppHandle) {
             }
         }
         tick = tick.wrapping_add(1);
-        thread::sleep(Duration::from_millis(750));
+        thread::sleep(Duration::from_millis(250));
     }
+}
+
+/// Screen points (physical px) covering the resting island: three across, just inside its
+/// top and its bottom edge. A click on any of them would otherwise land on the island.
+fn probe_points(state: &IslandState, settings: &Settings) -> Vec<(i32, i32)> {
+    let (wx, wy, scale, ww) = *state.geometry.lock().unwrap();
+    let top = match settings.mode {
+        IslandMode::Notch => 0.0,
+        IslandMode::Island => settings.offset_y as f64,
+    };
+    let cx = wx as f64 + ww as f64 / 2.0;
+    let mut points = Vec::with_capacity(PROBE_XS.len() * 2);
+    for dy in [top + 3.0, top + 24.0] {
+        for dx in PROBE_XS {
+            points.push((
+                (cx + dx * scale).round() as i32,
+                (wy as f64 + dy * scale).round() as i32,
+            ));
+        }
+    }
+    points
 }
 
 // ---------------------------------------------------------------------------
@@ -360,6 +488,8 @@ pub fn island_set_expanded(app: AppHandle, expanded: bool, focus: bool) {
     if expanded && state.fullscreen_hidden.swap(false, Ordering::SeqCst) {
         update_visibility(&app);
     }
+    // The open dashboard is never tucked away; closing it tucks it again if needed.
+    sync_tuck(&app);
     let Some(win) = window(&app) else { return };
     if expanded && focus {
         if !win.is_focused().unwrap_or(false) {
@@ -411,12 +541,13 @@ mod platform {
             GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
         },
         UI::{
+            Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON},
             Shell::{
                 SHQueryUserNotificationState, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN,
             },
             WindowsAndMessaging::{
-                GetClassNameW, GetCursorPos, GetForegroundWindow, GetWindowRect, IsWindow,
-                SetForegroundWindow,
+                GetAncestor, GetClassNameW, GetCursorPos, GetForegroundWindow, GetWindowRect,
+                IsWindow, SetForegroundWindow, WindowFromPoint, GA_ROOT,
             },
         },
     };
@@ -449,6 +580,59 @@ mod platform {
         String::from_utf16_lossy(&buf[..len.max(0) as usize])
     }
 
+    /// The desktop, the taskbar and shell flyouts: never an app the island is in the way of.
+    fn is_shell(hwnd: HWND) -> bool {
+        matches!(
+            class_name(hwnd).as_str(),
+            "Progman"
+                | "WorkerW"
+                | "Shell_TrayWnd"
+                | "Shell_SecondaryTrayWnd"
+                | "Windows.UI.Core.CoreWindow"
+                | "XamlExplorerHostIslandWindow"
+                | "TopLevelWindowForOverflowXamlIsland"
+                | "NotifyIconOverflowWindow"
+        )
+    }
+
+    pub fn mouse_button_down() -> bool {
+        // The high bit is set while the button is down.
+        let down = |vk: i32| unsafe { GetAsyncKeyState(vk) < 0 };
+        down(VK_LBUTTON.0 as i32) || down(VK_RBUTTON.0 as i32)
+    }
+
+    /// What a click at these screen points would land on. `Some(true)` if any of them
+    /// hits an app window, `Some(false)` if they all hit the desktop or the shell, and
+    /// `None` if the island itself was in the way of all the rest (it only lets clicks
+    /// through while the pointer is off it), so the caller keeps its last answer.
+    pub fn app_under(island: &WebviewWindow, points: &[(i32, i32)]) -> Option<bool> {
+        let own = island.hwnd().ok().map(|h| h.0);
+        let mut blocked = false;
+        for &(x, y) in points {
+            unsafe {
+                // Skips hidden windows and click-through ones (WS_EX_TRANSPARENT), so
+                // other overlays don't count and neither does the island while it lets
+                // clicks through.
+                let hit = WindowFromPoint(POINT { x, y });
+                if hit.0.is_null() {
+                    continue;
+                }
+                let root = GetAncestor(hit, GA_ROOT);
+                let root = if root.0.is_null() { hit } else { root };
+                if Some(root.0) == own {
+                    blocked = true;
+                } else if !is_shell(root) {
+                    return Some(true);
+                }
+            }
+        }
+        if blocked {
+            None
+        } else {
+            Some(false)
+        }
+    }
+
     /// True when a fullscreen app is in the foreground on the island's monitor.
     pub fn fullscreen_app_active(island: &WebviewWindow) -> bool {
         unsafe {
@@ -470,18 +654,7 @@ mod platform {
                     return false;
                 }
             }
-            let class = class_name(fg);
-            if matches!(
-                class.as_str(),
-                "Progman"
-                    | "WorkerW"
-                    | "Shell_TrayWnd"
-                    | "Shell_SecondaryTrayWnd"
-                    | "Windows.UI.Core.CoreWindow"
-                    | "XamlExplorerHostIslandWindow"
-                    | "TopLevelWindowForOverflowXamlIsland"
-                    | "NotifyIconOverflowWindow"
-            ) {
+            if is_shell(fg) {
                 return false;
             }
 
@@ -527,5 +700,11 @@ mod platform {
     pub fn restore_foreground(_hwnd: isize) {}
     pub fn fullscreen_app_active(_island: &WebviewWindow) -> bool {
         false
+    }
+    pub fn mouse_button_down() -> bool {
+        false
+    }
+    pub fn app_under(_island: &WebviewWindow, _points: &[(i32, i32)]) -> Option<bool> {
+        Some(false)
     }
 }

@@ -94,6 +94,8 @@ function Island({ settings }: { settings: Settings }) {
 
   const [expanded, setExpanded] = useState(false)
   const [hovered, setHovered] = useState(false)
+  /** Tucked away above the screen so the window under the island gets its clicks. */
+  const [tucked, setTucked] = useState(false)
   const [pulling, setPulling] = useState(false)
   /** While pulling the resting island down, the dashboard is drawn as it opens. */
   const [dragOpen, setDragOpen] = useState(false)
@@ -173,6 +175,10 @@ function Island({ settings }: { settings: Settings }) {
 
   // Hover comes from the backend because the window ignores the mouse outside the island.
   useEffect(() => (inTauri ? on(EVENTS.hover, setHovered) : undefined), [])
+  // The backend decides when to tuck away (an app window under the island) and when the
+  // pointer has brought it back.
+  // (A fresh handler each time: the demo backend keeps handlers in a Set.)
+  useEffect(() => on(EVENTS.tucked, (t) => setTucked(t)), [])
   useEffect(() => {
     if (!hovered) setLook(null)
   }, [hovered])
@@ -271,7 +277,8 @@ function Island({ settings }: { settings: Settings }) {
   const growOnHover = settings.hoverEffect && level === "full"
 
   const hasActivity = settings.featureMedia && settings.showMediaActivity && !!media?.available && recentlyPlayed
-  const closedView: Exclude<View, "dashboard"> = hotkey
+  const outOfSight = hotkey || tucked
+  const closedView: Exclude<View, "dashboard"> = outOfSight
     ? "hidden"
     : banner && media?.available
       ? "banner"
@@ -300,7 +307,7 @@ function Island({ settings }: { settings: Settings }) {
   }, [closedView, compactLayout, scale, notch, hovered, growOnHover])
 
   const rest = view === "dashboard" ? dash : closed
-  /** Hotkey mode tucks the island above the top edge of the screen. */
+  /** Hotkey mode and tucking away put the island above the top edge of the screen. */
   const restY = view === "hidden" ? -(top + closed.h + 16) : 0
 
   const closedRadius =

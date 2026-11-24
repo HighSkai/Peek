@@ -34,6 +34,7 @@ building the native app. Useful query parameters:
 | `&prompt=Hello` | Send a question to the demo assistant |
 | `&media=0` / `&playing=0` | Nothing playing / paused |
 | `&banner=1` | Announce a new track shortly after loading |
+| `&tucked=1` | Tuck away as if a window were under the island, then come back |
 | `&update=1` | Pretend a newer release is out (Settings → Updates, with a fake download) |
 | `&motion=full` | Animation level: `system`, `full`, `reduced` or `off` |
 

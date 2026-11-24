@@ -11,6 +11,7 @@
 //   &prompt=...               send a question to the (fake) assistant
 //   &media=0                  nothing playing      &playing=0   paused
 //   &banner=1                 announce a new track shortly after loading
+//   &tucked=1                 tuck away after a second, come back 2.5 s later
 //   &update=1                 pretend a newer release is available
 //   &motion=system|full|reduced|off
 
@@ -40,6 +41,7 @@ let settings: Settings = {
   launchAtLogin: false,
   showOnStartup: true,
   hideInFullscreen: true,
+  tuckAway: true,
   collapseOnBlur: true,
   expandOnHover: false,
   hoverDelayMs: 350,
@@ -256,6 +258,13 @@ function setTrack(i: number) {
 
 if (params.get("banner") === "1") setTimeout(() => setTrack(1), 1200)
 
+// Tuck away as if a maximized window were under the island, then come back as if the
+// pointer had rested on the top edge.
+if (params.get("tucked") === "1") {
+  setTimeout(() => emit("island://tucked", true), 1000)
+  setTimeout(() => emit("island://tucked", false), 3500)
+}
+
 let volume = { level: 0.42, muted: false }
 let metering = false
 let phase = 0
@@ -309,8 +318,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // Updates
 // ---------------------------------------------------------------------------
 
-const VERSION = "0.3.0"
-const NEWER = "0.3.1"
+const VERSION = "0.3.1"
+const NEWER = "0.3.2"
 const demoUpdate = params.get("update") === "1"
 
 function updateInfo() {

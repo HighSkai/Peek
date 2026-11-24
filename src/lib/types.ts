@@ -26,6 +26,7 @@ export interface Settings {
   launchAtLogin: boolean
   showOnStartup: boolean
   hideInFullscreen: boolean
+  tuckAway: boolean
   collapseOnBlur: boolean
   expandOnHover: boolean
   hoverDelayMs: number

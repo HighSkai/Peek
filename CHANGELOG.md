@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.1 (2026-11-23)
+
+### Out of the way
+
+- The island no longer covers what's under it. When a window sits under the resting island (a maximized browser's tabs, an app's title bar), it slides up above the screen and lets every click through. Rest the pointer on the top edge of the screen in front of it for a moment and it comes back; move away and it tucks again.
+- Opening it with the shortcut or the tray works as before, and closing the dashboard tucks it away again.
+- New *Move aside for windows* switch in Settings → General → Behavior. It's on by default.
+
+### Also
+
+- Fullscreen games and videos hide the island sooner: Peek checks every 250 ms instead of every 750 ms.
+- New README screenshots, including the island moving aside over a browser.
+
 ## 0.3.0 (2026-11-23)
 
 ### Updates without reinstalling

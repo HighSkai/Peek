@@ -176,6 +176,14 @@ export function GeneralPage({ s, set }: PageProps) {
         <Row label="Hide during fullscreen apps" description="Games, videos and presentations get the whole screen.">
           <Switch checked={s.hideInFullscreen} onCheckedChange={(v) => set({ hideInFullscreen: v })} />
         </Row>
+        {!hotkey && (
+          <Row
+            label="Move aside for windows"
+            description="Slides up while a window is under it. Rest the pointer on the top edge to bring it back."
+          >
+            <Switch checked={s.tuckAway} onCheckedChange={(v) => set({ tuckAway: v })} />
+          </Row>
+        )}
         <Row label="Close when clicking elsewhere">
           <Switch checked={s.collapseOnBlur} onCheckedChange={(v) => set({ collapseOnBlur: v })} />
         </Row>
